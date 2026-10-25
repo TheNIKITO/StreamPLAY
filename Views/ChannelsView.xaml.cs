@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Threading;
 
 namespace StreamPLAY;
@@ -44,6 +45,16 @@ public partial class ChannelsView : UserControl, IPage
             list.Add(new CatVM { Key = "c:" + c.Name, Name = c.Name, Count = c.Items.Count, Items = c.Items });
         Cats.ItemsSource = list;
         Cats.SelectedItem = list.FirstOrDefault(c => c.Key == selectKey) ?? list.FirstOrDefault(c => c.Key == "all");
+    }
+
+    // Os grupos não pegam foco (o teclado continua no app), e o ListBox do WPF só seleciona no clique quando
+    // o item consegue pegar o foco — por isso clicar num grupo não fazia nada. A seleção é feita aqui.
+    void Cat_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not ListBoxItem { DataContext: CatVM c }) return;
+        e.Handled = true;
+        if (Cats.SelectedItem != c) Cats.SelectedItem = c;
+        else if (_search != null) Cats_SelectionChanged(null, null);   // clicar no grupo atual depois de uma busca volta para ele
     }
 
     void Cats_SelectionChanged(object sender, SelectionChangedEventArgs e)

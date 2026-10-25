@@ -27,6 +27,9 @@
     <Style x:Key="CatItem" TargetType="ListBoxItem">
       <Setter Property="Cursor" Value="Hand"/>
       <Setter Property="Focusable" Value="False"/>
+      <Setter Property="AutomationProperties.Name" Value="{Binding Name}"/>
+      <!-- sem foco o ListBox não seleciona no clique: a seleção é feita em Cat_Click -->
+      <EventSetter Event="PreviewMouseLeftButtonDown" Handler="Cat_Click"/>
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="ListBoxItem">
