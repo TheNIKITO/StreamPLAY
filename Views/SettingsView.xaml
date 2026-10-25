@@ -18,7 +18,19 @@
               <TextBlock Text="Configurações" FontSize="28" FontWeight="Bold" VerticalAlignment="Center"/>
             </DockPanel>
 
-            <TextBlock Text="SUA LISTA" Foreground="#8C8C8C" FontSize="12" FontWeight="Bold" Margin="0,28,0,10"/>
+            <TextBlock Text="SUA CONTA" Foreground="#8C8C8C" FontSize="12" FontWeight="Bold" Margin="0,28,0,10"/>
+            <Border Background="#222222" CornerRadius="6" Padding="18,14">
+              <DockPanel>
+                <Button DockPanel.Dock="Right" Style="{StaticResource GhostBtn}" Content="Sair da conta" VerticalAlignment="Center" Margin="12,0,0,0"
+                        Click="Sair_Click"/>
+                <StackPanel VerticalAlignment="Center">
+                  <TextBlock x:Name="ContaText" FontSize="14" Foreground="White" TextTrimming="CharacterEllipsis"/>
+                  <TextBlock x:Name="ContaSub" FontSize="13" Foreground="#B3B3B3" Margin="0,6,0,0" TextWrapping="Wrap"/>
+                </StackPanel>
+              </DockPanel>
+            </Border>
+
+            <TextBlock Text="SUA LISTA" Foreground="#8C8C8C" FontSize="12" FontWeight="Bold" Margin="0,24,0,10"/>
             <Border Background="#222222" CornerRadius="6" Padding="18,14">
               <StackPanel>
                 <TextBlock x:Name="SourceText" FontSize="14" Foreground="White" TextTrimming="CharacterEllipsis"/>

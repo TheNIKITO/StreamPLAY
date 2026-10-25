@@ -12,6 +12,14 @@ Baixe o **StreamPLAY.exe** na [última versão](https://github.com/TheNIKITO/Str
 - O app se **atualiza sozinho**: ao abrir ele procura versão nova, baixa e reabre já atualizado; com ele aberto, avisa quando tem novidade e instala ao fechar.
 - O Windows pode mostrar "o Windows protegeu o computador" na primeira vez: clique em **Mais informações → Executar assim mesmo**.
 
+## Conta
+
+Para usar o app é preciso entrar com o **login e a senha** que você recebeu. Depois da primeira vez ele entra sozinho.
+
+- O acesso é conferido ao abrir e a cada 15 minutos. Se a mensalidade vencer sem pagamento, o app mostra o valor, a data e a chave Pix; depois de pagar, clique em **Já paguei, verificar de novo**.
+- Sem internet, o app continua abrindo por até 3 dias desde a última confirmação.
+- Para trocar de conta: **Configurações → Sair da conta**.
+
 ## Como organizar sua lista
 
 O StreamPLAY separa tudo sozinho pelo `group-title` de cada item:

@@ -23,6 +23,10 @@ public class AppData
     public List<string> Favorites { get; set; } = new();
     public Dictionary<string, Progress> Progress { get; set; } = new();
     public List<string> Recent { get; set; } = new();
+    // Conta do PLAYGER: guarda só o id do acesso (hash de login + senha), nunca a senha.
+    public string Login { get; set; }
+    public string AcessoId { get; set; }
+    public DateTime ContaOk { get; set; }
 }
 
 public static class Store

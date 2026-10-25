@@ -37,6 +37,12 @@ public partial class MainWindow : Window
     bool _checkingRemote;
     Library _pendingLib;
     readonly DispatcherTimer _updateTimer = new() { Interval = TimeSpan.FromMinutes(30) };
+    // STREAMPLAY_CONTA_SECONDS só existe para testes; o normal é conferir a conta a cada 15 minutos
+    static readonly TimeSpan ContaEvery = int.TryParse(Environment.GetEnvironmentVariable("STREAMPLAY_CONTA_SECONDS"), out var cs) && cs > 0
+        ? TimeSpan.FromSeconds(cs) : TimeSpan.FromMinutes(15);
+    readonly DispatcherTimer _contaTimer = new() { Interval = ContaEvery };
+    DateTime _ultimaConta;
+    bool _verificandoConta;
     bool _restarting, _updating;
     bool _fullscreen;
     WindowState _preFull;
@@ -57,9 +63,11 @@ public partial class MainWindow : Window
             StartSplash();
             Updater.Cleanup();
             if (Updater.Enabled && await StartupUpdate()) return;
-            await LoadLibrary();
             if (Updater.Enabled) _updateTimer.Start();
+            if (await GarantirConta()) await LoadLibrary();
         };
+        _contaTimer.Tick += async (_, _) => await ConferirConta();
+        Activated += async (_, _) => { if (DateTime.Now - _ultimaConta > TimeSpan.FromTicks(Math.Min(ContaEvery.Ticks, TimeSpan.FromMinutes(10).Ticks))) await ConferirConta(); };
         _updateTimer.Tick += async (_, _) => await CheckUpdates(manual: false);
         StateChanged += (_, _) => MaxBtn.Content = WindowState == WindowState.Maximized && !_fullscreen ? "" : "";
         PreviewKeyDown += OnKey;
@@ -99,6 +107,7 @@ public partial class MainWindow : Window
         Lib = lib;
         _movies = _series = null;
         _channels = null;
+        if (NaTelaDeConta) return;   // lista recarregou por trás da tela de login: só aparece depois de entrar
         TopBar.Visibility = Visibility.Visible;
         Navigate(_tab ?? Store.D.Tab ?? "movies");
     }
@@ -153,6 +162,7 @@ public partial class MainWindow : Window
 
     public void ShowSetup(string error)
     {
+        if (NaTelaDeConta) return;
         TopBar.Visibility = Visibility.Collapsed;
         CloseOverlay();
         PageHost.Content = new SetupView(error);
@@ -160,7 +170,7 @@ public partial class MainWindow : Window
 
     public void LeaveSetup()
     {
-        if (Lib == null) return;
+        if (Lib == null || NaTelaDeConta) return;
         TopBar.Visibility = Visibility.Visible;
         Navigate(_tab ?? Store.D.Tab ?? "movies");
     }
@@ -171,6 +181,102 @@ public partial class MainWindow : Window
         Store.Save();
         _tab = null;
         await LoadLibrary();
+    }
+
+    // ---------- Conta (PLAYGER) ----------
+
+    public Conta.Resultado ContaAtual { get; private set; }
+    bool NaTelaDeConta => PageHost.Content is LoginView;
+    // sem internet, quem já entrou continua usando por até 3 dias desde a última confirmação
+    static readonly TimeSpan Tolerancia = TimeSpan.FromDays(3);
+
+    /// <summary>Na abertura: confere a conta salva. Devolve false quando a tela de login ficou na frente.</summary>
+    async Task<bool> GarantirConta()
+    {
+        if (string.IsNullOrEmpty(Store.D.AcessoId)) { ShowLogin(null); EndSplash(); return false; }
+        SplashText.Text = "Verificando seu acesso...";
+        var r = await Conta.VerificarAsync(Store.D.AcessoId);
+        SplashText.Text = "Carregando sua lista...";
+        if (r.Estado == Conta.Estado.Liberado) { AceitarConta(r); AvisarVencimento(r); return true; }
+        if (r.Estado == Conta.Estado.SemConexao && DateTime.Now - Store.D.ContaOk < Tolerancia)
+        {
+            _ultimaConta = DateTime.Now;
+            _contaTimer.Start();
+            Toast("Sem internet para confirmar seu acesso agora. Vou tentar de novo daqui a pouco.");
+            return true;
+        }
+        MostrarConta(r);
+        EndSplash();
+        return false;
+    }
+
+    /// <summary>Conferência periódica (timer e ao voltar para o app): bloqueia na hora se o acesso caiu.</summary>
+    async Task ConferirConta()
+    {
+        if (_verificandoConta || string.IsNullOrEmpty(Store.D.AcessoId) || NaTelaDeConta || ContaAtual == null && Store.D.ContaOk == default) return;
+        _verificandoConta = true;
+        _ultimaConta = DateTime.Now;
+        try
+        {
+            var r = await Conta.VerificarAsync(Store.D.AcessoId);
+            if (NaTelaDeConta) return;
+            if (r.Estado == Conta.Estado.Liberado) AceitarConta(r);
+            else if (r.Estado != Conta.Estado.SemConexao || DateTime.Now - Store.D.ContaOk > Tolerancia) MostrarConta(r);
+        }
+        finally { _verificandoConta = false; }
+    }
+
+    void AceitarConta(Conta.Resultado r)
+    {
+        ContaAtual = r;
+        Store.D.ContaOk = DateTime.Now;
+        if (!string.IsNullOrEmpty(r.Acesso?.Login)) Store.D.Login = r.Acesso.Login;
+        Store.Save();
+        _ultimaConta = DateTime.Now;
+        _contaTimer.Start();
+    }
+
+    void AvisarVencimento(Conta.Resultado r)
+    {
+        var aviso = Conta.Aviso(r);
+        if (aviso != null) Dispatcher.BeginInvoke(() => Toast(aviso), DispatcherPriority.Background);
+    }
+
+    void MostrarConta(Conta.Resultado r)
+    {
+        if (r.Estado == Conta.Estado.Invalido) SairDaConta("Sua senha mudou ou o acesso foi removido. Entre de novo.");
+        else if (r.Estado == Conta.Estado.Bloqueado) ShowLogin(new LoginView(r));
+        else ShowLogin(new LoginView(r.Mensagem));
+    }
+
+    void ShowLogin(LoginView view)
+    {
+        _contaTimer.Stop();
+        ContaAtual = null;
+        CloseSearch(clear: true);
+        TopBar.Visibility = Visibility.Collapsed;
+        OverlayHost.Children.Clear();
+        OverlayHost.Visibility = Visibility.Collapsed;
+        PageHost.Content = view ?? new LoginView((string)null);
+        _player?.Close();   // depois de trocar a página, para o player não reabrir a barra de cima
+    }
+
+    /// <summary>A tela de login confirmou a conta.</summary>
+    public async void ContaLiberada(Conta.Resultado r)
+    {
+        AceitarConta(r);
+        PageHost.Content = null;
+        if (Lib != null) { TopBar.Visibility = Visibility.Visible; Navigate(_tab ?? Store.D.Tab ?? "movies"); }
+        else await LoadLibrary();
+        AvisarVencimento(r);
+    }
+
+    public void SairDaConta(string aviso)
+    {
+        Store.D.AcessoId = null;
+        Store.D.ContaOk = default;
+        Store.Save();
+        ShowLogin(new LoginView(aviso));
     }
 
     // ---------- Navegação ----------
@@ -188,7 +294,7 @@ public partial class MainWindow : Window
 
     public void Navigate(string tab)
     {
-        if (Lib == null) return;
+        if (Lib == null || NaTelaDeConta) return;
         _tab = tab;
         Store.D.Tab = tab;
         _navigating = true;
@@ -274,6 +380,7 @@ public partial class MainWindow : Window
     public async void Play(PlayRequest req)
     {
         if (req == null || string.IsNullOrWhiteSpace(req.Url)) { Toast("Este item não tem link de vídeo."); return; }
+        if (NaTelaDeConta) return;
         if (_player != null) { _player.Switch(req); return; }
         try { await App.VlcReady; }
         catch (Exception ex) { App.Log(ex); Toast("Não foi possível iniciar o motor do VLC: " + ex.Message); return; }
@@ -292,7 +399,7 @@ public partial class MainWindow : Window
         if (_player != p) return;
         _player = null;
         if (_fullscreen) SetFullscreen(false);
-        TopBar.Visibility = Lib != null && PageHost.Content is not SetupView ? Visibility.Visible : Visibility.Collapsed;
+        TopBar.Visibility = Lib != null && PageHost.Content is not SetupView && !NaTelaDeConta ? Visibility.Visible : Visibility.Collapsed;
         WinBtns.Visibility = Visibility.Visible;
         (PageHost.Content as IPage)?.Refresh();
         foreach (var d in OverlayHost.Children.OfType<DetailsView>()) d.Refresh();
@@ -385,7 +492,7 @@ public partial class MainWindow : Window
             else if (SearchBox.IsKeyboardFocused || SearchBox.Text.Length > 0) { CloseSearch(clear: true); Keyboard.ClearFocus(); e.Handled = true; }
         }
         else if (ctrl && e.Key == Key.F && Lib != null && TopBar.IsVisible) { OpenSearch(); e.Handled = true; }
-        else if (e.Key == Key.F5 && Lib != null) { _ = LoadLibrary(quiet: true); e.Handled = true; }
+        else if (e.Key == Key.F5 && Lib != null && !NaTelaDeConta) { _ = LoadLibrary(quiet: true); e.Handled = true; }
     }
 
     // ---------- Atualização automática ----------

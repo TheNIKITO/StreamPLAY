@@ -18,6 +18,13 @@ public partial class SettingsView : UserControl
         CountText.Text = MainWindow.I.Lib?.Summary ?? "";
         WatchText.Text = file ? "● Atualização automática ligada: salve o arquivo e o app reorganiza sozinho." : "● Lista online: o app confere novidades sozinho a cada 10 minutos (e quando você volta para ele).";
         EditBtn.Visibility = FolderBtn.Visibility = file ? Visibility.Visible : Visibility.Collapsed;
+        var conta = MainWindow.I.ContaAtual?.Acesso;
+        ContaText.Text = $"Conectado como {Store.D.Login}";
+        var sub = new List<string>();
+        if (!string.IsNullOrWhiteSpace(conta?.Plano)) sub.Add(conta.Plano);
+        if (conta?.FaturaVenc is { } venc) sub.Add($"próximo vencimento {venc:dd/MM/yyyy} ({Conta.Dinheiro(conta.FaturaValor)})");
+        var linha = string.Join("  •  ", sub);
+        ContaSub.Text = linha.Length > 0 ? char.ToUpper(linha[0]) + linha[1..] : "Acesso liberado.";
         FullBox.IsChecked = Store.D.Fullscreen;
         NextBox.IsChecked = Store.D.AutoNext;
         Guide.Text = SetupView.GuideText;
@@ -93,6 +100,13 @@ public partial class SettingsView : UserControl
         Store.Save();
         (MainWindow.I.PageHost.Content as IPage)?.Refresh();
         MainWindow.I.Toast("\"Continuar assistindo\" foi limpo");
+    }
+
+    void Sair_Click(object sender, RoutedEventArgs e)
+    {
+        if (MessageBox.Show("Sair da sua conta? Para usar o StreamPLAY de novo, será preciso digitar o login e a senha.", "StreamPLAY",
+                MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        MainWindow.I.SairDaConta(null);
     }
 
     void Close_Click(object sender, RoutedEventArgs e) => MainWindow.I.CloseOverlay();
