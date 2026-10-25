@@ -43,7 +43,7 @@ public partial class SettingsView : UserControl
         var ver = Assembly.GetExecutingAssembly().GetName().Version;
         string vlc = "";
         try { vlc = App.VLC?.Version?.Split(' ')[0]; } catch { }
-        VersionText.Text = $"StreamPLAY {ver?.ToString(3)}" + (string.IsNullOrEmpty(vlc) ? "" : $"  •  motor VLC {vlc}");
+        VersionText.Text = $"StreamPLAY {ver?.ToString(3)}" + (string.IsNullOrEmpty(vlc) ? "" : $"  •  motor VLC {vlc}{(App.VlcEhEmbutido ? " (embutido)" : "")}");
 
         ShowUpdateStatus();
         MainWindow.I.UpdateStatusChanged += ShowUpdateStatus;

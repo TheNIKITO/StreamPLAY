@@ -10,12 +10,13 @@
     <AssemblyName>StreamPLAY</AssemblyName>
     <RootNamespace>StreamPLAY</RootNamespace>
     <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <Product>StreamPLAY</Product>
     <Company>TheNIKITO</Company>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SatelliteResourceLanguages>pt-BR</SatelliteResourceLanguages>
     <NoWarn>CA1416;NU1701</NoWarn>
+    <DefaultItemExcludes>$(DefaultItemExcludes);VlcPack\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
@@ -29,6 +30,12 @@
 
   <ItemGroup>
     <PackageReference Include="LibVLCSharp.WPF" Version="3.10.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- o motor do VLC vai junto, compactado dentro do VlcPack.dll -->
+    <ProjectReference Include="VlcPack\VlcPack.csproj" />
+    <AssemblyMetadata Include="VlcVersao" Value="$(VlcVersao)" />
   </ItemGroup>
 
 </Project>

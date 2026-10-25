@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- O motor do VLC 64 bits (pacote oficial VideoLAN.LibVLC.Windows) compactado num vlc.zip dentro desta dll.
+       Fica numa dll separada para o app só carregar esses ~40 MB na primeira vez, quando extrai o VLC. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <RootNamespace>StreamPLAY</RootNamespace>
+    <VlcZip>$(BaseIntermediateOutputPath)vlc.zip</VlcZip>
+    <VlcStage>$(BaseIntermediateOutputPath)vlc-stage\</VlcStage>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- só baixa o pacote; os arquivos entram pelo vlc.zip abaixo, não pela cópia automática do pacote -->
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="$(VlcVersao)" GeneratePathProperty="true" ExcludeAssets="all" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Fora do pacote: cabeçalhos de C e módulos que um player não usa (transmitir/gravar, visualizações de áudio, descoberta de rede). -->
+    <VlcArquivo Include="$(PkgVideoLAN_LibVLC_Windows)\build\x64\**\*"
+                Exclude="$(PkgVideoLAN_LibVLC_Windows)\build\x64\include\**;
+                         $(PkgVideoLAN_LibVLC_Windows)\build\x64\plugins\access_output\**;
+                         $(PkgVideoLAN_LibVLC_Windows)\build\x64\plugins\stream_out\**;
+                         $(PkgVideoLAN_LibVLC_Windows)\build\x64\plugins\mux\**;
+                         $(PkgVideoLAN_LibVLC_Windows)\build\x64\plugins\visualization\**;
+                         $(PkgVideoLAN_LibVLC_Windows)\build\x64\plugins\services_discovery\**;
+                         $(PkgVideoLAN_LibVLC_Windows)\build\x64\plugins\video_splitter\**" />
+    <EmbeddedResource Include="$(VlcZip)" LogicalName="vlc.zip" Visible="false" />
+  </ItemGroup>
+
+  <!-- plugins.dat = índice dos módulos (sem ele o VLC abre os ~280 módulos na primeira vez, e o antivírus analisa
+       um por um: ~25 s). O VLC só aceita o índice se data e tamanho de cada módulo baterem, então o app marca os
+       arquivos extraídos com a data fixa 2024-01-01 00:00:00 UTC (VlcEmbutido.DataDosModulos).
+       Para gerar de novo (ao trocar a versão do VLC ou os módulos excluídos): extraia obj\vlc.zip numa pasta,
+       marque todos os arquivos com essa data e rode o vlc-cache-gen.exe da MESMA versão do VLC na pasta plugins. -->
+  <Target Name="EmpacotarVlc" BeforeTargets="PrepareForBuild" Inputs="@(VlcArquivo);plugins.dat" Outputs="$(VlcZip)">
+    <Error Condition="'@(VlcArquivo)' == ''" Text="Não achei os arquivos do VLC no pacote VideoLAN.LibVLC.Windows $(VlcVersao)." />
+    <RemoveDir Directories="$(VlcStage)" />
+    <Copy SourceFiles="@(VlcArquivo)" DestinationFiles="@(VlcArquivo->'$(VlcStage)%(RecursiveDir)%(Filename)%(Extension)')" />
+    <Copy SourceFiles="plugins.dat" DestinationFolder="$(VlcStage)plugins" />
+    <ZipDirectory SourceDirectory="$(VlcStage)" DestinationFile="$(VlcZip)" Overwrite="true" />
+    <RemoveDir Directories="$(VlcStage)" />
+  </Target>
+
+</Project>

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Windows;
+using System.Windows.Threading;
 using LibVLCSharp.Shared;
 using Microsoft.Win32;
 
@@ -13,7 +14,7 @@ public partial class App : Application
     static bool _errorOpen;
     static DateTime _lastError;
 
-    public static Task VlcReady => _vlcReady;
+    public static Task VlcReady => _vlcReady ??= Task.Run(PrepararVlc);
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -33,35 +34,53 @@ public partial class App : Application
         Store.Load();
         if (e.Args.Length > 0 && File.Exists(e.Args[0])) Store.D.Source = Path.GetFullPath(e.Args[0]);
 
-        VlcDir = FindVlc();
-        if (VlcDir == null)
-        {
-            var r = MessageBox.Show(
-                "O StreamPLAY usa o motor do VLC para reproduzir os vídeos, mas ele não foi encontrado neste computador.\n\n" +
-                "Instale o VLC (64 bits) e abra o StreamPLAY de novo.\n\nAbrir o site do VLC agora?",
-                "StreamPLAY", MessageBoxButton.YesNo, MessageBoxImage.Information);
-            if (r == MessageBoxResult.Yes) Process.Start(new ProcessStartInfo("https://www.videolan.org/vlc/") { UseShellExecute = true });
-            Shutdown();
-            return;
-        }
-
-        _vlcReady = Task.Run(() =>
-        {
-            Core.Initialize(VlcDir);
-            VLC = new LibVLC("--no-video-title-show", "--quiet", "--no-snapshot-preview", "--no-stats",
-                             "--freetype-rel-fontsize=18", "--freetype-outline-thickness=4");
-        });
-
         new MainWindow().Show();
+        // O VLC vem dentro do app: na primeira vez é extraído em segundo plano, depois que a janela já apareceu
+        // (enquanto a pessoa entra na conta), para não atrasar a abertura.
+        var aposAbrir = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        aposAbrir.Tick += (_, _) => { aposAbrir.Stop(); _ = VlcReady; };
+        aposAbrir.Start();
     }
 
-    static string FindVlc()
+    static void PrepararVlc()
     {
-        var c = new List<string>
+        VlcDir = VlcAoLado() ?? VlcEmbutido.Preparar() ?? VlcInstalado()
+                 ?? throw new InvalidOperationException("não consegui preparar o motor de vídeo. Feche e abra o StreamPLAY de novo.");
+        Core.Initialize(VlcDir);
+        var args = new List<string>
         {
-            Path.Combine(AppContext.BaseDirectory, "vlc"),
-            Path.Combine(AppContext.BaseDirectory, "libvlc", "win-x64"),
+            "--no-video-title-show", "--quiet", "--no-snapshot-preview", "--no-stats",
+            "--freetype-rel-fontsize=18", "--freetype-outline-thickness=4",
+            // não mostra quadros quebrados (os "quadrados" no começo do vídeo): espera o primeiro quadro bom
+            "--no-avcodec-corrupted",
         };
+        // STREAMPLAY_VLC_LOG=arquivo grava o log detalhado do VLC (para investigar vídeo com problema)
+        var log = Environment.GetEnvironmentVariable("STREAMPLAY_VLC_LOG");
+        if (!string.IsNullOrEmpty(log)) { args.Remove("--quiet"); args.Add("--verbose=2"); }
+        VLC = new LibVLC(args.ToArray());
+        if (!string.IsNullOrEmpty(log))
+        {
+            var w = new StreamWriter(log, append: true) { AutoFlush = true };
+            var trava = new object();
+            VLC.Log += (_, e) => { lock (trava) w.WriteLine($"{DateTime.Now:HH:mm:ss.fff} [{e.Level}] {e.Module}: {e.Message}"); };
+        }
+    }
+
+    public static bool VlcEhEmbutido => VlcDir != null && string.Equals(VlcDir, VlcEmbutido.Pasta, StringComparison.OrdinalIgnoreCase);
+
+    static bool TemVlc(string d) => d != null && File.Exists(Path.Combine(d, "libvlc.dll")) && Directory.Exists(Path.Combine(d, "plugins"));
+
+    // pasta "vlc" ao lado do exe: permite testar outra versão do motor sem recompilar
+    static string VlcAoLado() => new[]
+    {
+        Path.Combine(AppContext.BaseDirectory, "vlc"),
+        Path.Combine(AppContext.BaseDirectory, "libvlc", "win-x64"),
+    }.FirstOrDefault(TemVlc);
+
+    // último recurso, se a extração falhar: um VLC 64 bits instalado no PC
+    static string VlcInstalado()
+    {
+        var c = new List<string>();
         try
         {
             using var k = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, RegistryView.Registry64).OpenSubKey(@"SOFTWARE\VideoLAN\VLC");
@@ -69,16 +88,20 @@ public partial class App : Application
         }
         catch { }
         c.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "VideoLAN", "VLC"));
-        return c.FirstOrDefault(d => d != null && File.Exists(Path.Combine(d, "libvlc.dll")) && Directory.Exists(Path.Combine(d, "plugins")));
+        return c.FirstOrDefault(TemVlc);
     }
 
     public static void Log(Exception ex)
     {
-        if (ex == null) return;
+        if (ex != null) Log(ex.ToString());
+    }
+
+    public static void Log(string texto)
+    {
         try
         {
             Directory.CreateDirectory(Store.Dir);
-            File.AppendAllText(Path.Combine(Store.Dir, "erros.log"), $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {ex}\n\n");
+            File.AppendAllText(Path.Combine(Store.Dir, "erros.log"), $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {texto}\n\n");
         }
         catch { }
     }

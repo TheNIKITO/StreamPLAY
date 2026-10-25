@@ -8,7 +8,7 @@ Player estilo Netflix para listas **M3U**, com **Canais**, **Filmes** e **Série
 
 Baixe o **StreamPLAY.exe** na [última versão](https://github.com/TheNIKITO/StreamPLAY/releases/latest) e abra. Não tem instalador: é um arquivo só.
 
-- Precisa do **[VLC 64 bits](https://www.videolan.org/vlc/)** instalado (o StreamPLAY usa o motor dele para tocar os vídeos).
+- **Não precisa instalar o VLC**: o motor dele já vem dentro do app. Na primeira vez que abre, o StreamPLAY prepara o player sozinho em alguns segundos.
 - O app se **atualiza sozinho**: ao abrir ele procura versão nova, baixa e reabre já atualizado; com ele aberto, avisa quando tem novidade e instala ao fechar.
 - O Windows pode mostrar "o Windows protegeu o computador" na primeira vez: clique em **Mais informações → Executar assim mesmo**.
 

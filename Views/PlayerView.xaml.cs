@@ -32,6 +32,9 @@ public partial class PlayerView : UserControl
     volatile float _cache;
     long _lastTime = -1;
     int _retries;
+    DateTime _playingAt, _vigiaEspera;
+    bool _vigiado, _simulado;
+    long _reabrirEm = -1;
     string _panel, _aspect = "original";
 
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
@@ -58,7 +61,8 @@ public partial class PlayerView : UserControl
     void OnLoaded(object sender, RoutedEventArgs e)
     {
         if (_mp != null || _closing) return;
-        _mp = new MediaPlayer(App.VLC) { EnableHardwareDecoding = true, EnableKeyInput = false, EnableMouseInput = false };
+        // A aceleração de vídeo vai como opção de cada mídia (automática, igual ao VLC) — ver MakeMedia.
+        _mp = new MediaPlayer(App.VLC) { EnableKeyInput = false, EnableMouseInput = false };
         _mp.Playing += (_, _) => Dispatcher.BeginInvoke(OnPlaying);
         _mp.Paused += (_, _) => Dispatcher.BeginInvoke(() => { _pausedAt = DateTime.Now; UpdatePlayIcon(); });
         _mp.Buffering += (_, a) => _cache = a.Cache;
@@ -106,6 +110,9 @@ public partial class PlayerView : UserControl
         _cache = 0;
         _lastTime = -1;
         _startedAt = DateTime.Now;
+        _playingAt = _vigiaEspera = default;
+        _vigiado = false;
+        _simulado = _reabrirEm >= 0;   // na reabertura da vigia, não provoca o defeito de novo
         NextCard.Visibility = ResumeToast.Visibility = ErrorBox.Visibility = Visibility.Collapsed;
         HidePausedInfo();
         ClosePanel();
@@ -127,10 +134,17 @@ public partial class PlayerView : UserControl
         bool remote = url.Contains("://");
         var media = remote ? new Media(App.VLC, url, FromType.FromLocation) : new Media(App.VLC, url, FromType.FromPath);
         media.AddOption($":network-caching={Store.D.Caching}");
+        // "any" = o VLC escolhe a aceleração que funciona neste PC e cai para o processador se precisar (o padrão do VLC)
+        media.AddOption(SemAceleracao.Contains(url) ? ":avcodec-hw=none" : ":avcodec-hw=any");
         if (req.IsLive) { media.AddOption(":http-reconnect"); media.AddOption($":live-caching={Store.D.Caching}"); }
         foreach (var o in req.Options) if (!string.IsNullOrWhiteSpace(o)) media.AddOption(":" + o.Trim().TrimStart(':'));
 
-        if (!req.IsLive && !req.FromStart)
+        if (_reabrirEm >= 0)
+        {
+            if (!req.IsLive) media.AddOption(":start-time=" + (_reabrirEm / 1000.0).ToString("0.0", Inv));
+            _reabrirEm = -1;
+        }
+        else if (!req.IsLive && !req.FromStart)
         {
             var p = Store.GetProgress(req.Key);
             if (p != null && !p.Finished && p.Pos > 15000)
@@ -188,6 +202,7 @@ public partial class PlayerView : UserControl
     void OnPlaying()
     {
         if (_mp == null || _closing) return;
+        if (_playingAt == default) _playingAt = DateTime.Now;
         ApplyVolume();
         UpdatePlayIcon();
         HidePausedInfo();
@@ -248,7 +263,7 @@ public partial class PlayerView : UserControl
         var st = _mp.State;
         long len = _mp.Length, t = _mp.Time;
 
-        if (st == VLCState.Playing) ApplyVolume();
+        if (st == VLCState.Playing) { ApplyVolume(); Vigiar(now, t); }
         if (st == VLCState.Playing && t > 0 && _lastTime >= 0 && t != _lastTime) _cache = 100;
         _lastTime = t;
         if (st == VLCState.Playing && (now - _startedAt).TotalSeconds > 20) _retries = 0;
@@ -287,6 +302,81 @@ public partial class PlayerView : UserControl
         FullIcon.Data = (Geometry)FindResource(MainWindow.I.IsFullscreen ? "G.ExitFull" : "G.Full");
         NoActivate();
         MainWindow.I.SyncTopmost();
+    }
+
+    // ---------- Vigia dos primeiros segundos ----------
+    // Alguns arquivos abrem sem faixa de áudio escolhida, ou com o vídeo sem aparecer (tela preta com som).
+    // Nos primeiros segundos o player confere e corrige: escolhe o áudio (de preferência em português) e, se o
+    // vídeo não aparecer, reabre no mesmo ponto sem aceleração de vídeo — e lembra disso para esse link.
+
+    static readonly HashSet<string> SemAceleracao = new(StringComparer.OrdinalIgnoreCase);
+    // STREAMPLAY_TESTE_DEFEITO=audio|video|vout só existe para testes: provoca o defeito para ver a vigia corrigir
+    static readonly string Defeito = Environment.GetEnvironmentVariable("STREAMPLAY_TESTE_DEFEITO");
+
+    void SimularDefeito()
+    {
+        if (Defeito == "audio") _mp.SetAudioTrack(-1);
+        else if (Defeito == "video") _mp.SetVideoTrack(-1);
+        App.Log($"Teste: defeito '{Defeito}' provocado (áudio {_mp.AudioTrack}/{_mp.AudioTrackCount}, vídeo {_mp.VideoTrack}/{_mp.VideoTrackCount}).");
+    }
+
+    // Vigia até o vídeo ter tocado 8 s de verdade (ou 40 s de relógio, se a internet estiver travando).
+    void Vigiar(DateTime now, long t)
+    {
+        if (_vigiado || _playingAt == default) return;
+        double s = (now - _playingAt).TotalSeconds;
+        if (Defeito != null && !_simulado && s >= 0.8) { _simulado = true; SimularDefeito(); }
+        if (s < 1.5 || now < _vigiaEspera) return;
+        if (t > 8000 || s > 40) _vigiado = true;
+        // Só mexe nas faixas depois que o vídeo começou a andar: antes disso o VLC ainda pode estar carregando os
+        // decodificadores (na primeira vez demora, por causa do antivírus) e a faixa aparece como "nenhuma".
+        bool andando = t > 1500 || s > 12;
+        try
+        {
+            if (_mp.Mute) _mp.Mute = false;
+            if (andando && _mp.AudioTrack == -1 && _mp.AudioTrackCount > 0 && MelhorAudio() is int a)
+            {
+                _mp.SetAudioTrack(a);
+                App.Log($"Vigia do player: abriu sem faixa de áudio; escolhi a faixa {a}. {_req.Url}");
+                _vigiaEspera = now.AddSeconds(3);   // dá tempo da troca fazer efeito antes de conferir de novo
+                _vigiado = false;
+                return;
+            }
+
+            if (_mp.VideoTrackCount > 0)
+            {
+                if (_mp.VideoTrack == -1)
+                {
+                    if (andando && SafeTracks(() => _mp.VideoTrackDescription).Where(x => x.Id != -1).Select(x => (int?)x.Id).FirstOrDefault() is int v)
+                    {
+                        _mp.SetVideoTrack(v);
+                        App.Log($"Vigia do player: abriu sem faixa de vídeo; escolhi a faixa {v}. {_req.Url}");
+                        _vigiaEspera = now.AddSeconds(3);
+                        _vigiado = false;
+                        return;
+                    }
+                }
+                else if ((Defeito == "vout" ? 0 : _mp.VoutCount) == 0 && s > 3 && t > 1500 && SemAceleracao.Add(_req.Url.Trim()))
+                {
+                    // tem vídeo e o tempo está andando, mas nada aparece na tela
+                    App.Log($"Vigia do player: vídeo não apareceu; reabrindo em {t / 1000} s sem aceleração. {_req.Url}");
+                    _vigiado = true;
+                    _reabrirEm = Math.Max(0, t - 1000);
+                    Start(_req);
+                    return;
+                }
+            }
+        }
+        catch (Exception ex) { App.Log(ex); }
+    }
+
+    int? MelhorAudio()
+    {
+        var faixas = SafeTracks(() => _mp.AudioTrackDescription).Where(x => x.Id != -1).ToList();
+        if (faixas.Count == 0) return null;
+        foreach (var f in faixas)
+            if (Regex.IsMatch(f.Name ?? "", @"portugu|\bpt\b|\bpor\b|dublad", RegexOptions.IgnoreCase)) return f.Id;
+        return faixas[0].Id;
     }
 
     void SaveProgress()

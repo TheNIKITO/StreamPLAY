@@ -382,8 +382,11 @@ public partial class MainWindow : Window
         if (req == null || string.IsNullOrWhiteSpace(req.Url)) { Toast("Este item não tem link de vídeo."); return; }
         if (NaTelaDeConta) return;
         if (_player != null) { _player.Switch(req); return; }
+        bool esperando = !App.VlcReady.IsCompleted;
+        if (esperando) Toast("Preparando o player (só na primeira vez)...", fixo: true);
         try { await App.VlcReady; }
         catch (Exception ex) { App.Log(ex); Toast("Não foi possível iniciar o motor do VLC: " + ex.Message); return; }
+        if (esperando) { _toastTimer.Stop(); UI.Fade(ToastBox, 0, 300); }
         if (_player != null) { _player.Switch(req); return; }
         _player = new PlayerView(req);
         PlayerHost.Children.Add(_player);
@@ -636,12 +639,13 @@ public partial class MainWindow : Window
 
     // ---------- Aviso / abertura ----------
 
-    public void Toast(string text)
+    /// <summary>Aviso rápido no rodapé. Com fixo, fica até outro aviso (ou o código) tirar.</summary>
+    public void Toast(string text, bool fixo = false)
     {
         ToastText.Text = text;
         UI.Fade(ToastBox, 1, 200);
         _toastTimer.Stop();
-        _toastTimer.Start();
+        if (!fixo) _toastTimer.Start();
     }
 
     void StartSplash()

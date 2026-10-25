@@ -1,0 +1,6 @@
+<Project>
+  <PropertyGroup>
+    <!-- Versão do motor do VLC que vai dentro do app (pacote oficial VideoLAN.LibVLC.Windows). -->
+    <VlcVersao>3.0.24</VlcVersao>
+  </PropertyGroup>
+</Project>
