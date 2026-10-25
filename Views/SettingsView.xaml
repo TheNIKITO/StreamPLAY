@@ -1,0 +1,66 @@
+<UserControl x:Class="StreamPLAY.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:StreamPLAY">
+  <Grid>
+    <Border Background="#B3000000" MouseLeftButtonDown="Dim_MouseDown"/>
+    <ScrollViewer VerticalScrollBarVisibility="Auto" local:Smooth.On="True">
+      <Grid>
+        <Border Background="Transparent" MouseLeftButtonDown="Dim_MouseDown"/>
+        <Border Width="660" Margin="0,50,0,50" Padding="40,32,40,36" Background="#181818" CornerRadius="8"
+                HorizontalAlignment="Center" VerticalAlignment="Top">
+          <Border.Effect><DropShadowEffect BlurRadius="50" ShadowDepth="10" Opacity="0.8"/></Border.Effect>
+          <StackPanel>
+            <DockPanel>
+              <Button DockPanel.Dock="Right" Style="{StaticResource Round}" Width="36" Height="36" Click="Close_Click" AutomationProperties.Name="Fechar">
+                <Path Style="{StaticResource IcoS}" Data="{StaticResource G.Close}" StrokeThickness="2.6"/>
+              </Button>
+              <TextBlock Text="Configurações" FontSize="28" FontWeight="Bold" VerticalAlignment="Center"/>
+            </DockPanel>
+
+            <TextBlock Text="SUA LISTA" Foreground="#8C8C8C" FontSize="12" FontWeight="Bold" Margin="0,28,0,10"/>
+            <Border Background="#222222" CornerRadius="6" Padding="18,14">
+              <StackPanel>
+                <TextBlock x:Name="SourceText" FontSize="14" Foreground="White" TextTrimming="CharacterEllipsis"/>
+                <TextBlock x:Name="CountText" FontSize="13" Foreground="#B3B3B3" Margin="0,6,0,0"/>
+                <TextBlock x:Name="WatchText" FontSize="13" Foreground="#46D369" Margin="0,4,0,0" TextWrapping="Wrap"/>
+              </StackPanel>
+            </Border>
+            <WrapPanel Margin="0,12,0,0">
+              <Button x:Name="EditBtn" Style="{StaticResource GhostBtn}" Content="Abrir no Bloco de Notas" Margin="0,0,8,8" Click="Edit_Click"/>
+              <Button x:Name="FolderBtn" Style="{StaticResource GhostBtn}" Content="Abrir pasta" Margin="0,0,8,8" Click="Folder_Click"/>
+              <Button Style="{StaticResource GhostBtn}" Content="Recarregar (F5)" Margin="0,0,8,8" Click="Reload_Click"/>
+              <Button Style="{StaticResource GhostBtn}" Content="Trocar lista" Margin="0,0,8,8" Click="Change_Click"/>
+            </WrapPanel>
+
+            <TextBlock Text="REPRODUÇÃO" Foreground="#8C8C8C" FontSize="12" FontWeight="Bold" Margin="0,24,0,12"/>
+            <CheckBox x:Name="FullBox" Style="{StaticResource Switch}" Content="Abrir vídeos em tela cheia" Margin="0,0,0,14" Click="Opt_Click"/>
+            <CheckBox x:Name="NextBox" Style="{StaticResource Switch}" Content="Tocar o próximo episódio automaticamente" Margin="0,0,0,18" Click="Opt_Click"/>
+            <TextBlock Text="Buffer de rede (aumente se o vídeo travar)" FontSize="15" Margin="0,0,0,10"/>
+            <WrapPanel x:Name="CachePanel"/>
+
+            <TextBlock Text="ATUALIZAÇÕES" Foreground="#8C8C8C" FontSize="12" FontWeight="Bold" Margin="0,24,0,10"/>
+            <DockPanel>
+              <Button x:Name="UpdateBtn" DockPanel.Dock="Right" Style="{StaticResource GhostBtn}" Content="Procurar atualizações" Click="Update_Click" Margin="12,0,0,0"/>
+              <TextBlock x:Name="UpdateStatusText" FontSize="14" Foreground="#C8C8C8" TextWrapping="Wrap" VerticalAlignment="Center"/>
+            </DockPanel>
+
+            <TextBlock Text="COMO ORGANIZAR SUA LISTA" Foreground="#8C8C8C" FontSize="12" FontWeight="Bold" Margin="0,22,0,10"/>
+            <Border Background="#111111" CornerRadius="4" Padding="16,14" BorderBrush="#2A2A2A" BorderThickness="1">
+              <TextBlock x:Name="Guide" FontFamily="Consolas" FontSize="12.5" Foreground="#C8C8C8" TextWrapping="Wrap" LineHeight="19"/>
+            </Border>
+
+            <TextBlock Text="ATALHOS DO PLAYER" Foreground="#8C8C8C" FontSize="12" FontWeight="Bold" Margin="0,22,0,10"/>
+            <TextBlock FontSize="13.5" Foreground="#C8C8C8" TextWrapping="Wrap" LineHeight="22"
+                       Text="Espaço: pausar/continuar  •  ← →: voltar/avançar 10 s  •  ↑ ↓: volume  •  M: mudo  •  F ou duplo clique: tela cheia  •  N: próximo episódio  •  Page Up/Down: trocar canal  •  Esc: sair da tela cheia / voltar"/>
+
+            <DockPanel Margin="0,26,0,0">
+              <Button DockPanel.Dock="Right" Style="{StaticResource LinkBtn}" Content="Limpar &quot;Continuar assistindo&quot;" Click="ClearProgress_Click"/>
+              <TextBlock x:Name="VersionText" FontSize="12" Foreground="#6E6E6E" VerticalAlignment="Center"/>
+            </DockPanel>
+          </StackPanel>
+        </Border>
+      </Grid>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

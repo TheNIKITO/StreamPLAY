@@ -1,0 +1,11 @@
+bin/
+obj/
+dist/
+*.user
+.vs/
+
+# lista e projeto Firebase pessoais (não vão para o GitHub)
+lista-online/public/
+lista-online/projeto.txt
+lista-online/.firebase/
+lista-online/firebase-debug.log

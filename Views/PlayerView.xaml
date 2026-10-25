@@ -1,0 +1,255 @@
+<UserControl x:Class="StreamPLAY.PlayerView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vlc="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF"
+             Background="Black">
+  <vlc:VideoView x:Name="Video" Background="Black">
+    <Grid x:Name="Ui" Background="#01000000" Focusable="True" FocusVisualStyle="{x:Null}"
+          TextElement.FontFamily="Segoe UI" TextElement.Foreground="White" TextOptions.TextFormattingMode="Ideal">
+
+      <!-- "Você está assistindo" (pausado por um tempo) -->
+      <Grid x:Name="PausedInfo" Opacity="0" Visibility="Collapsed" IsHitTestVisible="False">
+        <Grid.Background>
+          <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+            <GradientStop Color="#E6000000" Offset="0"/>
+            <GradientStop Color="#66000000" Offset="0.6"/>
+            <GradientStop Color="#33000000" Offset="1"/>
+          </LinearGradientBrush>
+        </Grid.Background>
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Left" Margin="120,0,0,0" MaxWidth="640">
+          <TextBlock Text="Você está assistindo" FontSize="18" Foreground="#B3B3B3"/>
+          <TextBlock x:Name="PausedTitle" FontSize="52" FontWeight="Bold" TextWrapping="Wrap" Margin="0,8,0,0" LineHeight="60"/>
+          <TextBlock x:Name="PausedSub" FontSize="22" FontWeight="SemiBold" Margin="0,10,0,0" TextWrapping="Wrap"/>
+          <TextBlock x:Name="PausedPlot" FontSize="18" Foreground="#D0D0D0" TextWrapping="Wrap" Margin="0,16,0,0" LineHeight="27" MaxHeight="110" TextTrimming="WordEllipsis"/>
+        </StackPanel>
+        <TextBlock Text="Pausado" FontSize="18" Foreground="#B3B3B3" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,56,48"/>
+      </Grid>
+
+      <!-- Carregando -->
+      <Grid x:Name="Spinner" Width="76" Height="76" IsHitTestVisible="False" Visibility="Collapsed">
+        <Ellipse Stroke="#30FFFFFF" StrokeThickness="5"/>
+        <Path Stroke="#E50914" StrokeThickness="5" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+              Data="M38,2.5 A35.5,35.5 0 0 1 73.5,38" RenderTransformOrigin="0.5,0.5">
+          <Path.RenderTransform><RotateTransform x:Name="SpinRot"/></Path.RenderTransform>
+        </Path>
+      </Grid>
+
+      <!-- Ícone central (play/pause) -->
+      <Border x:Name="Flash" Width="100" Height="100" CornerRadius="50" Background="#80000000" Opacity="0"
+              IsHitTestVisible="False" RenderTransformOrigin="0.5,0.5">
+        <Border.RenderTransform><ScaleTransform x:Name="FlashScale"/></Border.RenderTransform>
+        <Viewbox Margin="30"><Path x:Name="FlashIcon" Width="24" Height="24" Fill="White"/></Viewbox>
+      </Border>
+
+      <!-- Indicadores de -10 / +10 -->
+      <Border x:Name="SeekBackFlash" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="200,0,0,0" Opacity="0"
+              IsHitTestVisible="False" Width="110" Height="110" CornerRadius="55" Background="#66000000">
+        <TextBlock x:Name="SeekBackText" Text="−10 s" FontSize="22" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+      </Border>
+      <Border x:Name="SeekFwdFlash" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,200,0" Opacity="0"
+              IsHitTestVisible="False" Width="110" Height="110" CornerRadius="55" Background="#66000000">
+        <TextBlock x:Name="SeekFwdText" Text="+10 s" FontSize="22" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+      </Border>
+
+      <!-- Mensagem rápida (volume, canal...) -->
+      <Border x:Name="Osd" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,34,44,0" Padding="18,10" CornerRadius="6"
+              Background="#CC000000" Opacity="0" IsHitTestVisible="False">
+        <TextBlock x:Name="OsdText" FontSize="20" FontWeight="SemiBold"/>
+      </Border>
+
+      <!-- Controles -->
+      <Grid x:Name="Chrome">
+        <Grid x:Name="TopArea" VerticalAlignment="Top" Height="120" Background="Transparent" Tag="bg-top">
+          <Rectangle IsHitTestVisible="False">
+            <Rectangle.Fill>
+              <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Color="#A6000000" Offset="0"/>
+                <GradientStop Color="#00000000" Offset="1"/>
+              </LinearGradientBrush>
+            </Rectangle.Fill>
+          </Rectangle>
+          <Button x:Name="BackBtn" Style="{StaticResource PBtn}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="24,18,0,0"
+                  Width="58" Height="58" Click="Back_Click" ToolTip="Voltar" AutomationProperties.Name="Voltar">
+            <Path Style="{StaticResource IcoS}" Data="{StaticResource G.Back}" StrokeThickness="2.2"/>
+          </Button>
+        </Grid>
+
+        <Grid VerticalAlignment="Bottom">
+          <Rectangle Height="260" VerticalAlignment="Bottom" IsHitTestVisible="False">
+            <Rectangle.Fill>
+              <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                <GradientStop Color="#00000000" Offset="0"/>
+                <GradientStop Color="#99000000" Offset="0.55"/>
+                <GradientStop Color="#E6000000" Offset="1"/>
+              </LinearGradientBrush>
+            </Rectangle.Fill>
+          </Rectangle>
+
+          <StackPanel x:Name="Bottom" VerticalAlignment="Bottom" Margin="40,0,40,18">
+            <!-- Barra de progresso -->
+            <Grid x:Name="SeekRow" Height="34">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition/>
+                <ColumnDefinition Width="Auto"/>
+              </Grid.ColumnDefinitions>
+              <Grid x:Name="SeekArea" Background="Transparent" Cursor="Hand"
+                    MouseLeftButtonDown="Seek_Down" MouseMove="Seek_Move" MouseLeftButtonUp="Seek_Up"
+                    MouseEnter="Seek_Enter" MouseLeave="Seek_Leave">
+                <Border x:Name="SeekRail" Height="4" Background="#66808080" VerticalAlignment="Center"/>
+                <Border x:Name="SeekHover" Height="4" Background="#59FFFFFF" HorizontalAlignment="Left" VerticalAlignment="Center" Width="0"/>
+                <Border x:Name="SeekFill" Height="4" Background="#E50914" HorizontalAlignment="Left" VerticalAlignment="Center" Width="0"/>
+                <Ellipse x:Name="SeekKnob" Width="16" Height="16" Fill="#E50914" HorizontalAlignment="Left" VerticalAlignment="Center"
+                         Margin="-8,0,0,0" RenderTransformOrigin="0.5,0.5">
+                  <Ellipse.RenderTransform><ScaleTransform x:Name="KnobScale"/></Ellipse.RenderTransform>
+                </Ellipse>
+                <Canvas IsHitTestVisible="False">
+                  <Border x:Name="SeekTip" Background="#F2262626" CornerRadius="3" Padding="9,4" Canvas.Bottom="26" Visibility="Collapsed">
+                    <TextBlock x:Name="SeekTipText" FontSize="14" FontWeight="SemiBold"/>
+                  </Border>
+                </Canvas>
+              </Grid>
+              <TextBlock x:Name="Remaining" Grid.Column="1" FontSize="15" Margin="18,0,0,0" VerticalAlignment="Center" MinWidth="52" TextAlignment="Right"/>
+            </Grid>
+
+            <!-- Ao vivo -->
+            <StackPanel x:Name="LiveRow" Orientation="Horizontal" Margin="6,0,0,10" Visibility="Collapsed">
+              <Border Background="#E50914" CornerRadius="3" Padding="8,3">
+                <StackPanel Orientation="Horizontal">
+                  <Ellipse x:Name="LiveDot" Width="8" Height="8" Fill="White" VerticalAlignment="Center" Margin="0,0,7,0"/>
+                  <TextBlock Text="AO VIVO" FontSize="12" FontWeight="Bold"/>
+                </StackPanel>
+              </Border>
+              <TextBlock x:Name="LiveCat" FontSize="14" Foreground="#B3B3B3" VerticalAlignment="Center" Margin="12,0,0,0"/>
+            </StackPanel>
+
+            <!-- Botões -->
+            <Grid Height="60">
+              <StackPanel x:Name="LeftBtns" Orientation="Horizontal" HorizontalAlignment="Left">
+                <Button x:Name="PlayBtn" Style="{StaticResource PBtn}" Click="Play_Click" ToolTip="Pausar (Espaço)" AutomationProperties.Name="Reproduzir ou pausar">
+                  <Path x:Name="PlayIcon" Style="{StaticResource IcoF}" Data="{StaticResource G.Pause}"/>
+                </Button>
+                <Button x:Name="RewBtn" Style="{StaticResource PBtn}" Click="Rew_Click" ToolTip="Voltar 10 segundos (←)" AutomationProperties.Name="Voltar 10 segundos">
+                  <Grid Width="24" Height="24">
+                    <Path Style="{StaticResource IcoS}" Data="{StaticResource G.Arc}"/>
+                    <Path Style="{StaticResource IcoF}" Data="{StaticResource G.ArcHead}"/>
+                    <TextBlock Text="10" FontSize="7.2" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,2.6,0,0"/>
+                  </Grid>
+                </Button>
+                <Button x:Name="FwdBtn" Style="{StaticResource PBtn}" Click="Fwd_Click" ToolTip="Avançar 10 segundos (→)" AutomationProperties.Name="Avançar 10 segundos">
+                  <Grid Width="24" Height="24">
+                    <Grid RenderTransformOrigin="0.5,0.5">
+                      <Grid.RenderTransform><ScaleTransform ScaleX="-1"/></Grid.RenderTransform>
+                      <Path Style="{StaticResource IcoS}" Data="{StaticResource G.Arc}"/>
+                      <Path Style="{StaticResource IcoF}" Data="{StaticResource G.ArcHead}"/>
+                    </Grid>
+                    <TextBlock Text="10" FontSize="7.2" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,2.6,0,0"/>
+                  </Grid>
+                </Button>
+                <Button x:Name="ChPrevBtn" Style="{StaticResource PBtn}" Click="ChPrev_Click" ToolTip="Canal anterior (Page Up)" AutomationProperties.Name="Canal anterior">
+                  <Path Style="{StaticResource IcoS}" Data="{StaticResource G.ChevU}" StrokeThickness="2.4"/>
+                </Button>
+                <Button x:Name="ChNextBtn" Style="{StaticResource PBtn}" Click="ChNext_Click" ToolTip="Próximo canal (Page Down)" AutomationProperties.Name="Próximo canal">
+                  <Path Style="{StaticResource IcoS}" Data="{StaticResource G.ChevD}" StrokeThickness="2.4"/>
+                </Button>
+                <Button x:Name="VolBtn" Style="{StaticResource PBtn}" Click="Mute_Click" MouseEnter="Vol_Enter" ToolTip="Volume (↑ ↓, M = mudo)" AutomationProperties.Name="Volume">
+                  <Grid Width="24" Height="24">
+                    <Path Style="{StaticResource IcoF}" Data="{StaticResource G.Vol}"/>
+                    <Path x:Name="VolWaves" Style="{StaticResource IcoS}" Data="{StaticResource G.VolWaves}"/>
+                    <Path x:Name="VolMute" Style="{StaticResource IcoS}" Data="{StaticResource G.MuteX}" Visibility="Collapsed"/>
+                  </Grid>
+                </Button>
+              </StackPanel>
+
+              <TextBlock x:Name="TitleText" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="18"
+                         TextTrimming="CharacterEllipsis" IsHitTestVisible="False"/>
+
+              <StackPanel x:Name="RightBtns" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="NextBtn" Style="{StaticResource PBtn}" Click="Next_Click" ToolTip="Próximo episódio (N)" AutomationProperties.Name="Próximo episódio">
+                  <Path Style="{StaticResource IcoF}" Data="{StaticResource G.Next}"/>
+                </Button>
+                <Button x:Name="EpisodesBtn" Style="{StaticResource PBtn}" Click="Episodes_Click" ToolTip="Episódios" AutomationProperties.Name="Episódios">
+                  <Path Style="{StaticResource IcoS}" Data="{StaticResource G.Episodes}"/>
+                </Button>
+                <Button x:Name="ChannelsBtn" Style="{StaticResource PBtn}" Click="Channels_Click" ToolTip="Canais" AutomationProperties.Name="Lista de canais">
+                  <Path Style="{StaticResource IcoS}" Data="{StaticResource G.List}" StrokeThickness="2.2"/>
+                </Button>
+                <Button x:Name="SubsBtn" Style="{StaticResource PBtn}" Click="Subs_Click" ToolTip="Áudio e legendas" AutomationProperties.Name="Áudio e legendas">
+                  <Path Style="{StaticResource IcoS}" Data="{StaticResource G.Subs}"/>
+                </Button>
+                <Button x:Name="SpeedBtn" Style="{StaticResource PBtn}" Click="Speed_Click" ToolTip="Velocidade e imagem" AutomationProperties.Name="Velocidade e imagem">
+                  <Grid Width="24" Height="24">
+                    <Path Style="{StaticResource IcoS}" Data="{StaticResource G.Speed}"/>
+                    <Ellipse Width="3.4" Height="3.4" Fill="White" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="10.3,12.3,0,0"/>
+                  </Grid>
+                </Button>
+                <Button x:Name="FullBtn" Style="{StaticResource PBtn}" Click="Full_Click" ToolTip="Tela cheia (F)" AutomationProperties.Name="Tela cheia">
+                  <Path x:Name="FullIcon" Style="{StaticResource IcoS}" Data="{StaticResource G.Full}" StrokeThickness="2.2"/>
+                </Button>
+              </StackPanel>
+            </Grid>
+          </StackPanel>
+        </Grid>
+      </Grid>
+
+      <!-- Painéis (áudio/legendas, velocidade, episódios, canais) -->
+      <Border x:Name="PanelBox" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,40,112"
+              Background="#F5262626" CornerRadius="6" Visibility="Collapsed">
+        <Border.Effect><DropShadowEffect BlurRadius="30" ShadowDepth="4" Opacity="0.6"/></Border.Effect>
+        <ContentControl x:Name="PanelContent" Focusable="False"/>
+      </Border>
+
+      <!-- Volume -->
+      <Border x:Name="VolPop" HorizontalAlignment="Left" VerticalAlignment="Bottom" Width="46" Height="160"
+              Background="#F5262626" CornerRadius="4" Visibility="Collapsed">
+        <Grid x:Name="VolArea" Background="Transparent" Margin="0,18" Cursor="Hand"
+              MouseLeftButtonDown="Vol_Down" MouseMove="Vol_Move" MouseLeftButtonUp="Vol_Up">
+          <Border Width="5" Background="#66808080" CornerRadius="2"/>
+          <Border x:Name="VolFill" Width="5" Background="#E50914" VerticalAlignment="Bottom" CornerRadius="2"/>
+          <Ellipse x:Name="VolKnob" Width="15" Height="15" Fill="#E50914" VerticalAlignment="Bottom"/>
+        </Grid>
+      </Border>
+
+      <!-- Próximo episódio -->
+      <StackPanel x:Name="NextCard" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                  Margin="0,0,48,132" Visibility="Collapsed">
+        <Button Style="{StaticResource Secondary}" Content="Assistir créditos" Click="Credits_Click" Margin="0,0,12,0"/>
+        <Button x:Name="NextNowBtn" Style="{StaticResource Primary}" Padding="0" Click="Next_Click">
+          <Grid>
+            <Border x:Name="NextFill" Background="#C8C8C8" HorizontalAlignment="Left" Width="0" CornerRadius="4"/>
+            <StackPanel Orientation="Horizontal" Margin="22,10,26,10">
+              <Viewbox Width="20" Height="20" Margin="0,0,10,0"><Path Style="{StaticResource IcoF}" Data="{StaticResource G.Play}"/></Viewbox>
+              <TextBlock Text="Próximo episódio" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Grid>
+        </Button>
+      </StackPanel>
+
+      <!-- Continuando de... -->
+      <Border x:Name="ResumeToast" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="40,0,0,132"
+              Background="#F0262626" CornerRadius="4" Padding="18,6,8,6" Visibility="Collapsed">
+        <StackPanel Orientation="Horizontal">
+          <TextBlock x:Name="ResumeText" FontSize="15" VerticalAlignment="Center"/>
+          <Button Style="{StaticResource GhostBtn}" Margin="16,0,0,0" Click="StartOver_Click" Padding="12,6">
+            <StackPanel Orientation="Horizontal">
+              <Viewbox Width="15" Height="15" Margin="0,0,8,0"><Path Style="{StaticResource IcoS}" Data="{StaticResource G.Restart}" StrokeThickness="2.6"/></Viewbox>
+              <TextBlock Text="Do início" FontWeight="SemiBold"/>
+            </StackPanel>
+          </Button>
+        </StackPanel>
+      </Border>
+
+      <!-- Erro -->
+      <Border x:Name="ErrorBox" HorizontalAlignment="Center" VerticalAlignment="Center" Background="#F2181818" CornerRadius="8"
+              Padding="38,30" Visibility="Collapsed" MaxWidth="600">
+        <StackPanel>
+          <TextBlock x:Name="ErrorTitle" Text="Não foi possível reproduzir" FontSize="26" FontWeight="Bold"/>
+          <TextBlock x:Name="ErrorText" FontSize="15" Foreground="#B3B3B3" TextWrapping="Wrap" Margin="0,10,0,24" LineHeight="22"/>
+          <StackPanel Orientation="Horizontal">
+            <Button Style="{StaticResource Primary}" Content="Tentar novamente" Click="Retry_Click"/>
+            <Button Style="{StaticResource Secondary}" Content="Voltar" Margin="10,0,0,0" Click="Back_Click"/>
+          </StackPanel>
+        </StackPanel>
+      </Border>
+    </Grid>
+  </vlc:VideoView>
+</UserControl>

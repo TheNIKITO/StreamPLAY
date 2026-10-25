@@ -1,0 +1,104 @@
+using System.Diagnostics;
+using System.Reflection;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+
+namespace StreamPLAY;
+
+public partial class SettingsView : UserControl
+{
+    public SettingsView()
+    {
+        InitializeComponent();
+        var src = Store.D.Source ?? "";
+        bool file = !M3U.IsUrl(src);
+        SourceText.Text = src;
+        SourceText.ToolTip = src;
+        CountText.Text = MainWindow.I.Lib?.Summary ?? "";
+        WatchText.Text = file ? "● Atualização automática ligada: salve o arquivo e o app reorganiza sozinho." : "● Lista online: o app confere novidades sozinho a cada 10 minutos (e quando você volta para ele).";
+        EditBtn.Visibility = FolderBtn.Visibility = file ? Visibility.Visible : Visibility.Collapsed;
+        FullBox.IsChecked = Store.D.Fullscreen;
+        NextBox.IsChecked = Store.D.AutoNext;
+        Guide.Text = SetupView.GuideText;
+
+        foreach (var ms in new[] { 1000, 1500, 3000, 5000, 8000 })
+        {
+            var rb = new RadioButton
+            {
+                Style = (Style)FindResource("Chip"), Content = $"{ms / 1000.0:0.#} s".Replace('.', ','), GroupName = "cache", IsChecked = Store.D.Caching == ms,
+            };
+            int v = ms;
+            rb.Checked += (_, _) => { Store.D.Caching = v; Store.Save(); };
+            CachePanel.Children.Add(rb);
+        }
+
+        var ver = Assembly.GetExecutingAssembly().GetName().Version;
+        string vlc = "";
+        try { vlc = App.VLC?.Version?.Split(' ')[0]; } catch { }
+        VersionText.Text = $"StreamPLAY {ver?.ToString(3)}" + (string.IsNullOrEmpty(vlc) ? "" : $"  •  motor VLC {vlc}");
+
+        ShowUpdateStatus();
+        MainWindow.I.UpdateStatusChanged += ShowUpdateStatus;
+        Unloaded += (_, _) => MainWindow.I.UpdateStatusChanged -= ShowUpdateStatus;
+    }
+
+    void ShowUpdateStatus()
+    {
+        var s = MainWindow.I.UpdateStatus;
+        UpdateStatusText.Text = string.IsNullOrEmpty(s)
+            ? $"Versão {Updater.CurrentText}. O app procura atualizações sozinho ao abrir e a cada 30 minutos."
+            : s;
+        UpdateBtn.Content = Updater.Ready != null ? "Reiniciar e atualizar" : "Procurar atualizações";
+    }
+
+    async void Update_Click(object sender, RoutedEventArgs e)
+    {
+        if (Updater.Ready != null) { MainWindow.I.InstallUpdateNow(); return; }
+        UpdateBtn.IsEnabled = false;
+        await MainWindow.I.CheckUpdates(manual: true);
+        UpdateBtn.IsEnabled = true;
+        ShowUpdateStatus();
+    }
+
+    void Opt_Click(object sender, RoutedEventArgs e)
+    {
+        Store.D.Fullscreen = FullBox.IsChecked == true;
+        Store.D.AutoNext = NextBox.IsChecked == true;
+        Store.Save();
+    }
+
+    void Edit_Click(object sender, RoutedEventArgs e)
+    {
+        try { Process.Start(new ProcessStartInfo("notepad.exe", $"\"{Store.D.Source}\"") { UseShellExecute = true }); } catch { }
+    }
+
+    void Folder_Click(object sender, RoutedEventArgs e)
+    {
+        try { Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{Store.D.Source}\"") { UseShellExecute = true }); } catch { }
+    }
+
+    async void Reload_Click(object sender, RoutedEventArgs e)
+    {
+        MainWindow.I.CloseOverlay();
+        await MainWindow.I.LoadLibrary(quiet: true);
+    }
+
+    void Change_Click(object sender, RoutedEventArgs e) => MainWindow.I.ShowSetup(null);
+
+    void ClearProgress_Click(object sender, RoutedEventArgs e)
+    {
+        if (MessageBox.Show("Apagar o progresso de tudo que você estava assistindo?", "StreamPLAY", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
+        Store.D.Progress.Clear();
+        Store.Save();
+        (MainWindow.I.PageHost.Content as IPage)?.Refresh();
+        MainWindow.I.Toast("\"Continuar assistindo\" foi limpo");
+    }
+
+    void Close_Click(object sender, RoutedEventArgs e) => MainWindow.I.CloseOverlay();
+
+    void Dim_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource == sender) MainWindow.I.CloseOverlay();
+    }
+}

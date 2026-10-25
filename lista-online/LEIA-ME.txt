@@ -1,0 +1,30 @@
+LISTA ONLINE DO STREAMPLAY (Firebase Hosting, plano grátis)
+============================================================
+
+1) Edite a lista: dois cliques em editar-lista.bat (abre public\lista.m3u no Bloco de Notas).
+   Salve com Ctrl+S.
+
+2) Publique: dois cliques em publicar-lista.bat.
+   Na PRIMEIRA vez ele:
+     - instala o Firebase CLI (precisa do Node.js, que você já tem);
+     - abre o navegador para você entrar com sua conta Google;
+     - pede um nome de projeto (vira o link: https://NOME.web.app/lista.m3u).
+       Só letras minúsculas, números e hífen; aperte Enter para usar a sugestão
+       e cria um projeto separado do ScreenPLAY só para a lista.
+   Nas próximas vezes é só dois cliques: publica em poucos segundos.
+
+3) No StreamPLAY (só na primeira vez): Configurações > Trocar lista >
+   cole o link (o publicar-lista.bat já deixa ele copiado).
+   Depois disso, os apps abertos conferem a lista sozinhos a cada 10 minutos
+   e quando você volta para o app. Só baixam de novo se a lista mudou.
+
+Custos: os vídeos NÃO passam pelo Firebase (o VLC busca direto do link de cada
+vídeo). O Firebase só entrega o arquivo de texto da lista: o grátis (360 MB/dia)
+sobra. Evite colocar as capas aqui; use links de imagens hospedadas fora.
+
+Se a criação do projeto falhar (ex.: o Google pede para aceitar os termos):
+crie o projeto em https://console.firebase.google.com com o mesmo nome, rode o
+publicar-lista.bat de novo, digite o nome e responda S em "o projeto já é seu".
+Para trocar de projeto depois, apague o arquivo projeto.txt.
+
+Observação: qualquer pessoa com o link consegue baixar a lista.
