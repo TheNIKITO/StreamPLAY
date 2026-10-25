@@ -4,7 +4,17 @@ LISTA ONLINE DO STREAMPLAY (Firebase Hosting, plano grátis)
 1) Edite a lista: dois cliques em editar-lista.bat (abre public\lista.m3u no Bloco de Notas).
    Salve com Ctrl+S.
 
-2) Publique: dois cliques em publicar-lista.bat.
+   CANAIS ficam num arquivo separado: dois cliques em editar-canais.bat
+   (abre public\canais.m3u; na primeira vez ele já vem com um modelo explicado).
+   Use o padrão:
+     #EXTINF:-1 tvg-id="" tvg-name="Nome" tvg-logo="link-da-logo" group-title="CANAIS = Esportes",Nome
+     link-do-canal
+   O que vem depois de "CANAIS =" vira a fileira na aba Canais do app.
+   Não precisa de outro link: os canais vão no MESMO endereço da lista e o
+   app junta sozinho. E quando você mexe só nos canais, os apps baixam só o
+   arquivo dos canais, não a lista inteira de novo.
+
+2) Publique: dois cliques em publicar-lista.bat (publica a lista e os canais).
    Na PRIMEIRA vez ele:
      - instala o Firebase CLI (precisa do Node.js, que você já tem);
      - abre o navegador para você entrar com sua conta Google;

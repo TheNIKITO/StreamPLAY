@@ -14,7 +14,8 @@ public partial class SetupView : UserControl
         "Outras fileiras  →  group-title=\"FILMES | Ação\"\n\n" +
         "SÉRIES  →  group-title=\"SERIES | Drama\"\n" +
         "   e o nome do episódio assim: \"Nome da Série S01E01\"\n\n" +
-        "CANAIS  →  group-title=\"CANAIS | Esportes\"\n" +
+        "CANAIS  →  group-title=\"CANAIS = Esportes\"  (ou \"CANAIS | Esportes\")\n" +
+        "   os canais também podem ficar num canais.m3u ao lado da lista (mesmo link/pasta)\n" +
         "   (qualquer outro grupo também vira canal)\n\n" +
         "Exemplo:\n" +
         "#EXTINF:-1 tvg-name=\"Nome do filme\" tvg-logo=\"http://capa.jpg\" group-title=\"FILMES | Lançamentos\"\n" +

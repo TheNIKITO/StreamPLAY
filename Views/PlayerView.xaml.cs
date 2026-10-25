@@ -68,9 +68,7 @@ public partial class PlayerView : UserControl
         _mp.Buffering += (_, a) => _cache = a.Cache;
         _mp.EndReached += (_, _) => Dispatcher.BeginInvoke(OnEnded);
         _mp.EncounteredError += (_, _) => Dispatcher.BeginInvoke(OnError);
-        Video.MediaPlayer = _mp;
-        // o painel WinForms onde o VLC desenha vem cinza por padrão
-        if (UI.Find<System.Windows.Forms.Integration.WindowsFormsHost>(Video)?.Child is { } panel) panel.BackColor = System.Drawing.Color.Black;
+        Video.MediaPlayer = _mp;   // o fundo preto da área do vídeo vem da MainWindow (WM_CTLCOLORSTATIC)
         Start(_req);
         _tick.Start();
         SpinRot.BeginAnimation(RotateTransform.AngleProperty, new DoubleAnimation(0, 360, TimeSpan.FromSeconds(0.9)) { RepeatBehavior = RepeatBehavior.Forever });

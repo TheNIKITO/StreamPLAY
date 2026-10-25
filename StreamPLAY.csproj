@@ -10,7 +10,7 @@
     <AssemblyName>StreamPLAY</AssemblyName>
     <RootNamespace>StreamPLAY</RootNamespace>
     <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
-    <Version>1.2.1</Version>
+    <Version>1.2.2</Version>
     <Product>StreamPLAY</Product>
     <Company>TheNIKITO</Company>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>

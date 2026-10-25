@@ -17,7 +17,16 @@ if not exist "public\lista.m3u" (
 rem ---- quantos itens a lista tem
 set "ITENS=0"
 for /f %%n in ('find /c "#EXTINF" ^< "public\lista.m3u"') do set "ITENS=%%n"
-echo  Lista: public\lista.m3u  ^(!ITENS! itens^)
+echo  Lista:  public\lista.m3u  ^(!ITENS! itens^)
+
+rem ---- canais (opcional): vão no mesmo endereço e o app junta sozinho na aba Canais
+if exist "public\canais.m3u" (
+  set "CANAIS=0"
+  for /f %%n in ('findstr /b /c:"#EXTINF" "public\canais.m3u" ^| find /c /v ""') do set "CANAIS=%%n"
+  echo  Canais: public\canais.m3u  ^(!CANAIS! canais^)
+) else (
+  echo  Canais: nenhum ainda ^(para criar, use o editar-canais.bat^)
+)
 echo.
 
 rem ---- Firebase CLI (instala na primeira vez)
@@ -122,6 +131,7 @@ echo  ============================================
 echo   Lista publicada com sucesso.
 echo   Link: %URL%
 echo   ^(já foi copiado^)
+if exist "public\canais.m3u" echo   Os canais foram juntos, no mesmo link: o app coloca na aba Canais.
 echo.
 echo   Na primeira vez, cole esse link no StreamPLAY:
 echo   Configurações ^> Trocar lista ^> "ou cole o link da lista"

@@ -148,11 +148,13 @@ public partial class MainWindow : Window
         if (M3U.IsUrl(src ?? "") || !File.Exists(src)) return;
         try
         {
-            _watch = new FileSystemWatcher(Path.GetDirectoryName(Path.GetFullPath(src)), Path.GetFileName(src))
+            _watch = new FileSystemWatcher(Path.GetDirectoryName(Path.GetFullPath(src)))
             {
                 NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.FileName,
-                EnableRaisingEvents = true,
             };
+            _watch.Filters.Add(Path.GetFileName(src));
+            if (M3U.Companheira(src) is { } canais) _watch.Filters.Add(Path.GetFileName(canais));   // canais.m3u na mesma pasta
+            _watch.EnableRaisingEvents = true;
             FileSystemEventHandler h = (_, _) => Dispatcher.BeginInvoke(() => { _reloadTimer.Stop(); _reloadTimer.Start(); });
             _watch.Changed += h;
             _watch.Created += h;
@@ -681,6 +683,15 @@ public partial class MainWindow : Window
 
     IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        // A área onde o VLC desenha (VideoHwndHost do LibVLCSharp) é um controle "static" do Windows: ele pede a cor
+        // de fundo à janela-mãe e, sem resposta, pinta o cinza-claro padrão (#F0F0F0). Isso aparecia como quadrados e
+        // faixas brancas antes do primeiro quadro do vídeo e quando a tela mudava de tamanho. Responde preto.
+        if (msg == 0x0138) // WM_CTLCOLORSTATIC
+        {
+            SetBkColor(wParam, 0);
+            handled = true;
+            return GetStockObject(4); // BLACK_BRUSH
+        }
         if (msg == 0x0024) // WM_GETMINMAXINFO: maximizado respeita a barra de tarefas; tela cheia cobre o monitor inteiro
         {
             var mmi = Marshal.PtrToStructure<MINMAXINFO>(lParam);
@@ -706,6 +717,8 @@ public partial class MainWindow : Window
     [StructLayout(LayoutKind.Sequential)]
     struct MONITORINFO { public int cbSize; public RECT rcMonitor, rcWork; public uint dwFlags; }
 
+    [DllImport("gdi32.dll")] static extern IntPtr GetStockObject(int obj);
+    [DllImport("gdi32.dll")] static extern uint SetBkColor(IntPtr hdc, uint color);
     [DllImport("user32.dll")] static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
     [DllImport("user32.dll")] static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
     [DllImport("user32.dll")] static extern bool ReleaseCapture();

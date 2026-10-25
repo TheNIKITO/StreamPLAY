@@ -131,9 +131,9 @@ public static class M3U
 {
     static readonly Regex AttrRx = new(@"([\w-]+)\s*=\s*""([^""]*)""", RegexOptions.Compiled);
 
-    // "FILMES | Lançamentos", "SERIES - Ação", "CANAIS: Esportes", "FILMES" ...
+    // "FILMES | Lançamentos", "SERIES - Ação", "CANAIS: Esportes", "CANAIS = Esportes", "FILMES" ...
     static readonly Regex GroupRx = new(
-        @"^\s*(?<k>filmes?|movies?|vod|s[eé]ries?|seriados?|canais|canal)(?![a-zà-ÿ])\s*[|:\-–—/>]*\s*(?<c>.*)$",
+        @"^\s*(?<k>filmes?|movies?|vod|s[eé]ries?|seriados?|canais|canal)(?![a-zà-ÿ])\s*[|:\-–—/>=]*\s*(?<c>.*)$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     // "Nome S01E02", "Nome - S1 E2 - Título", "Nome T01E02", "Nome 1x02"
@@ -156,50 +156,156 @@ public static class M3U
 
     public static bool IsUrl(string s) => s.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || s.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
 
+    // Canais à parte: um canais.m3u ao lado da lista (mesmo endereço online ou mesma pasta) entra junto,
+    // sem precisar de outro link. Assim a lista grande não precisa ser baixada de novo quando só os canais mudam.
+    public const string ArquivoCanais = "canais.m3u";
+
+    /// <summary>Onde procurar o canais.m3u para esta lista (ou null se não se aplica).</summary>
+    public static string Companheira(string source)
+    {
+        if (string.IsNullOrWhiteSpace(source)) return null;
+        if (IsUrl(source))
+        {
+            if (!Uri.TryCreate(source, UriKind.Absolute, out var u)) return null;
+            var nome = Path.GetFileName(u.AbsolutePath);
+            // só para listas que são um arquivo .m3u publicado (não para links de painel com ?usuario=...)
+            if (!Regex.IsMatch(nome, @"\.m3u8?$", RegexOptions.IgnoreCase) || nome.Equals(ArquivoCanais, StringComparison.OrdinalIgnoreCase)) return null;
+            return new Uri(u, ArquivoCanais).ToString();
+        }
+        var cheio = Path.GetFullPath(source);
+        var p = Path.Combine(Path.GetDirectoryName(cheio), ArquivoCanais);
+        return string.Equals(cheio, p, StringComparison.OrdinalIgnoreCase) ? null : p;
+    }
+
+    // última leitura de cada arquivo: quando só um muda, o outro não precisa ser baixado/lido de novo
+    static string _fonte;
+    static Library _principal, _canais;
+
     public static async Task<Library> LoadAsync(string source)
+    {
+        var principal = await Ler(source, conditional: false);
+        Library canais = null;
+        var comp = Companheira(source);
+        if (comp != null)
+        {
+            try { canais = await Ler(comp, conditional: false); }
+            catch (Exception ex) when (ex is HttpRequestException or IOException or TaskCanceledException or UnauthorizedAccessException) { }
+        }
+        (_fonte, _principal, _canais) = (source, principal, canais);
+        return await Task.Run(() => Juntar(principal, canais));
+    }
+
+    /// <summary>Confere a lista online e o canais.m3u; baixa só o que mudou. Devolve null se nada mudou.</summary>
+    public static async Task<Library> LoadIfChangedAsync(string url)
+    {
+        if (url != _fonte || _principal == null) return await LoadAsync(url);
+        bool mudou = false;
+        var p = await Ler(url, conditional: true);
+        if (p != null) { _principal = p; mudou = true; }
+        var comp = Companheira(url);
+        if (comp != null)
+        {
+            try
+            {
+                var c = await Ler(comp, conditional: true);
+                if (c != null) { _canais = c; mudou = true; }
+            }
+            catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                // o canais.m3u foi apagado: os canais saem do app
+                if (_canais != null) { _canais = null; mudou = true; }
+                Esquecer(comp);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException) { }   // sem internet: fica como está
+        }
+        return mudou ? await Task.Run(() => Juntar(_principal, _canais)) : null;
+    }
+
+    // Lê e organiza um arquivo (link ou caminho). Com conditional, devolve null se não mudou desde a última vez.
+    static async Task<Library> Ler(string source, bool conditional)
     {
         string text, baseDir;
         if (IsUrl(source))
         {
-            var bytes = await Download(source, conditional: false);
+            var bytes = await Download(source, conditional);
+            if (bytes == null) return null;
             text = Decode(bytes);
             baseDir = source;
         }
         else
         {
-            var bytes = await ReadSharedAsync(source);
-            text = Decode(bytes);
+            if (!File.Exists(source) && Path.GetFileName(source).Equals(ArquivoCanais, StringComparison.OrdinalIgnoreCase)) return null;
+            text = Decode(await ReadSharedAsync(source));
             baseDir = Path.GetDirectoryName(Path.GetFullPath(source));
         }
         return await Task.Run(() => Parse(text, baseDir));
     }
 
-    // Lista online: guarda ETag/Last-Modified e o hash do conteúdo para só baixar e reorganizar quando mudar.
-    static string _etag, _lastModified, _lastHash, _lastUrl;
-
-    /// <summary>Baixa a lista online só se ela mudou desde a última vez; senão devolve null.</summary>
-    public static async Task<Library> LoadIfChangedAsync(string url)
+    /// <summary>
+    /// Junta a lista principal com a de canais (b pode ser null). Não mexe nas duas — cria categorias novas —
+    /// para poder juntar de novo quando só uma delas mudar.
+    /// </summary>
+    public static Library Juntar(Library a, Library b)
     {
-        var bytes = await Download(url, conditional: true);
-        if (bytes == null) return null;
-        return await Task.Run(() => Parse(Decode(bytes), url));
+        if (b == null || b.Items.Count == 0) return a;
+        var r = new Library();
+        var tipos = new[] { Kind.Channel, Kind.Movie, Kind.Series };
+        foreach (var lib in new[] { a, b })
+        {
+            foreach (var k in tipos)
+                foreach (var i in lib.All(k))
+                    if (r.Items.TryAdd(i.Key, i)) r.All(k).Add(i);
+            foreach (var e in lib.Episodes) r.Episodes.TryAdd(e.Key, e.Value);
+        }
+        foreach (var k in tipos)
+        {
+            var porNome = new Dictionary<string, (Category cat, HashSet<Item> tem)>();
+            foreach (var c in a.Cats(k).Concat(b.Cats(k)))
+            {
+                var itens = c.Items.Select(i => r.Items[i.Key]);
+                var n = Norm(c.Name);
+                if (!porNome.TryGetValue(n, out var dest))
+                {
+                    var nova = new Category { Name = c.Name, Kind = k, IsRelease = c.IsRelease, Order = porNome.Count };
+                    nova.Items.AddRange(itens);
+                    porNome[n] = (nova, null);
+                    r.Cats(k).Add(nova);
+                    continue;
+                }
+                // mesma categoria nas duas listas: soma os itens sem repetir
+                var tem = dest.tem ?? new HashSet<Item>(dest.cat.Items);
+                foreach (var i in itens) if (tem.Add(i)) dest.cat.Items.Add(i);
+                porNome[n] = (dest.cat, tem);
+            }
+            var ordem = r.Cats(k).OrderByDescending(c => c.IsRelease).ThenBy(c => c.Order).ToList();
+            r.Cats(k).Clear();
+            r.Cats(k).AddRange(ordem);
+        }
+        return r;
     }
+
+    // Lista online: guarda ETag/Last-Modified e o hash do conteúdo de cada link para só baixar e reorganizar quando mudar.
+    sealed class Versao { public string ETag, LastModified, Hash; }
+    static readonly Dictionary<string, Versao> Versoes = new();
+
+    static void Esquecer(string url) { lock (Versoes) Versoes.Remove(url); }
 
     static async Task<byte[]> Download(string url, bool conditional)
     {
-        if (url != _lastUrl) { _etag = _lastModified = _lastHash = null; _lastUrl = url; }
+        Versao v;
+        lock (Versoes) { if (!Versoes.TryGetValue(url, out v)) Versoes[url] = v = new Versao(); }
         using var req = new HttpRequestMessage(HttpMethod.Get, url);
-        if (conditional && _etag != null) req.Headers.TryAddWithoutValidation("If-None-Match", _etag);
-        if (conditional && _lastModified != null) req.Headers.TryAddWithoutValidation("If-Modified-Since", _lastModified);
+        if (conditional && v.ETag != null) req.Headers.TryAddWithoutValidation("If-None-Match", v.ETag);
+        if (conditional && v.LastModified != null) req.Headers.TryAddWithoutValidation("If-Modified-Since", v.LastModified);
         using var resp = await Http.SendAsync(req);
         if (resp.StatusCode == System.Net.HttpStatusCode.NotModified) return null;
         resp.EnsureSuccessStatusCode();
         var bytes = await resp.Content.ReadAsByteArrayAsync();
-        _etag = resp.Headers.ETag?.ToString();
-        _lastModified = resp.Content.Headers.LastModified?.ToString("R");
+        v.ETag = resp.Headers.ETag?.ToString();
+        v.LastModified = resp.Content.Headers.LastModified?.ToString("R");
         var hash = Convert.ToHexString(SHA1.HashData(bytes));
-        if (conditional && hash == _lastHash) return null;
-        _lastHash = hash;
+        if (conditional && hash == v.Hash) return null;
+        v.Hash = hash;
         return bytes;
     }
 
@@ -364,7 +470,7 @@ public static class M3U
         Kind k = w.StartsWith("FILME") || w.StartsWith("MOVIE") || w == "VOD" ? Kind.Movie
                : w.StartsWith("SERIE") || w.StartsWith("SERIADO") ? Kind.Series
                : Kind.Channel;
-        var cat = m.Groups["c"].Value.Trim().Trim('|', '-', ':', '/').Trim();
+        var cat = m.Groups["c"].Value.Trim().Trim('|', '-', ':', '/', '=').Trim();
         cat = Regex.Replace(cat, @"^(de|da|do|das|dos)\s+", "", RegexOptions.IgnoreCase);
         if (cat.Length > 0) cat = char.ToUpper(cat[0]) + cat[1..];
         return (k, cat);

@@ -1,0 +1,14 @@
+#EXTM3U
+# ================ CANAIS DO STREAMPLAY ================
+# Cada canal são 2 linhas: a linha #EXTINF e, logo embaixo, o link do canal.
+# A categoria (a fileira na aba Canais) vai depois de "CANAIS =", por exemplo:
+#   group-title="CANAIS = Esportes"    group-title="CANAIS = Abertos"    group-title="CANAIS = Notícias"
+# Sem categoria (group-title="CANAIS = "), o canal entra na fileira "Canais".
+# Linhas que começam com # (como estas) são ignoradas pelo app.
+#
+# Modelo — tire o "# " do começo das duas linhas e troque pelos dados do canal:
+# #EXTINF:-1 tvg-id="" tvg-name="Nome do Canal" tvg-logo="https://link-da-logo.png" group-title="CANAIS = Esportes",Nome do Canal
+# http://link-do-canal.m3u8
+#
+# Salve com Ctrl+S e rode o publicar-lista.bat: ele publica a lista e os canais juntos, no mesmo link.
+
