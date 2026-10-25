@@ -101,9 +101,15 @@ public static class Smooth
         var sv = sender as ScrollViewer ?? UI.Find<ScrollViewer>((DependencyObject)sender);
         if (sv == null || sv.ScrollableHeight <= 0) return;
         e.Handled = true;
+        Rolar(sv, e.Delta);
+    }
+
+    /// <summary>Um "giro" da roda do mouse (delta 120 = um dente; negativo desce).</summary>
+    public static void Rolar(ScrollViewer sv, int delta)
+    {
         double cur = sv.VerticalOffset;
         double baseOff = State.TryGetValue(sv, out var st) && (DateTime.Now - st.at).TotalMilliseconds < 280 ? st.target : cur;
-        double target = Math.Clamp(baseOff - e.Delta * 1.4, 0, sv.ScrollableHeight);
+        double target = Math.Clamp(baseOff - delta * 1.4, 0, sv.ScrollableHeight);
         State[sv] = (target, DateTime.Now);
         var a = new DoubleAnimation(cur, target, TimeSpan.FromMilliseconds(280)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
         sv.BeginAnimation(OffsetProperty, a);

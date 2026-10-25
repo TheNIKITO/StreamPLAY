@@ -65,6 +65,7 @@ public partial class MainWindow : Window
             if (Updater.Enabled && await StartupUpdate()) return;
             if (Updater.Enabled) _updateTimer.Start();
             if (await GarantirConta()) await LoadLibrary();
+            TesteRolagem.Talvez(this);
         };
         _contaTimer.Tick += async (_, _) => await ConferirConta();
         Activated += async (_, _) => { if (DateTime.Now - _ultimaConta > TimeSpan.FromTicks(Math.Min(ContaEvery.Ticks, TimeSpan.FromMinutes(10).Ticks))) await ConferirConta(); };

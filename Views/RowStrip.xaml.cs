@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -6,17 +7,25 @@ using System.Windows.Media.Animation;
 
 namespace StreamPLAY;
 
-/// <summary>Fileira horizontal com setas de paginação (igual às fileiras da Netflix).</summary>
+/// <summary>
+/// Fileira horizontal com setas de paginação (igual às fileiras da Netflix).
+/// Só monta os cartazes que cabem na tela (mais uma folga) e vai montando o resto ao avançar: montar os 40 de
+/// uma vez a cada fileira que entra na tela era o que travava a rolagem.
+/// </summary>
 public partial class RowStrip : UserControl
 {
     const double Gutter = 56;
     double _offset;
+    List<Card> _todos = new();
+    readonly ObservableCollection<Card> _montados = new();
+    static readonly Dictionary<Kind, DataTemplate> Modelos = new();
 
     public RowStrip()
     {
         InitializeComponent();
+        Strip.ItemsSource = _montados;
         Strip.SizeChanged += (_, _) => { Lane.Height = Strip.ActualHeight + 14 + 22; UpdateArrows(); };
-        Viewport.SizeChanged += (_, _) => { Clamp(); UpdateArrows(); };
+        Viewport.SizeChanged += (_, _) => { Montar(_offset); Clamp(); UpdateArrows(); };
         Root.MouseEnter += (_, _) => { Show(true); };
         Root.MouseLeave += (_, _) => { Show(false); };
         DataContextChanged += (_, _) => Bind();
@@ -32,15 +41,32 @@ public partial class RowStrip : UserControl
         TitleText.Text = vm.Title;
         AllBtn.Visibility = vm.CanShowAll ? Visibility.Visible : Visibility.Collapsed;
         AllText.Text = vm.Total > vm.Cards.Count ? $"Ver tudo ({vm.Total})" : "Ver tudo";
-        var tpl = (DataTemplate)FindResource(vm.Kind == Kind.Channel ? "ChannelCard" : "PosterCard");
-        double w = vm.Kind == Kind.Channel ? 230 : 168;
-        Strip.ItemTemplate = new DataTemplate { VisualTree = Wrap(tpl, w) };
-        Strip.ItemsSource = vm.Cards;
+        var kind = vm.Kind == Kind.Channel ? Kind.Channel : Kind.Movie;
+        if (!Modelos.TryGetValue(kind, out var modelo))
+        {
+            var tpl = (DataTemplate)FindResource(kind == Kind.Channel ? "ChannelCard" : "PosterCard");
+            modelo = Modelos[kind] = new DataTemplate { VisualTree = Wrap(tpl, kind == Kind.Channel ? 230 : 168) };
+            modelo.Seal();
+        }
+        if (Strip.ItemTemplate != modelo) Strip.ItemTemplate = modelo;
+        _todos = vm.Cards ?? new List<Card>();
+        _montados.Clear();
         _offset = 0;
         Shift.BeginAnimation(TranslateTransform.XProperty, null);
         Shift.X = 0;
+        Montar(0);
         Margin = new Thickness(0, 0, 0, 6);
         UpdateArrows();
+    }
+
+    double Cartao => (DataContext is RowVM { Kind: Kind.Channel } ? 230 : 168) + 8;
+
+    // Garante montados os cartazes que aparecem com a fileira deslocada em "ate" (mais um de folga).
+    void Montar(double ate)
+    {
+        double largura = Viewport.ActualWidth > 0 ? Viewport.ActualWidth : (MainWindow.I?.ActualWidth ?? 1920);
+        int precisa = Math.Min(_todos.Count, (int)Math.Ceiling((ate + largura) / Cartao) + 1);
+        for (int i = _montados.Count; i < precisa; i++) _montados.Add(_todos[i]);
     }
 
     // Embrulha o template do card num ContentPresenter com largura fixa e espaçamento.
@@ -55,15 +81,9 @@ public partial class RowStrip : UserControl
     }
 
     double View => Math.Max(0, Viewport.ActualWidth - 2 * Gutter);
-    double Max => Math.Max(0, Strip.ActualWidth - View);
-    double Step
-    {
-        get
-        {
-            double card = (DataContext is RowVM { Kind: Kind.Channel } ? 230 : 168) + 8;
-            return Math.Max(card, Math.Floor((View + 8) / card) * card);
-        }
-    }
+    // largura da fileira inteira, contando os cartazes que ainda não foram montados
+    double Max => Math.Max(0, _todos.Count * Cartao - 8 - View);
+    double Step => Math.Max(Cartao, Math.Floor((View + 8) / Cartao) * Cartao);
 
     void Left_Click(object sender, RoutedEventArgs e) => Page(-1);
     void Right_Click(object sender, RoutedEventArgs e) => Page(1);
@@ -71,8 +91,11 @@ public partial class RowStrip : UserControl
     void Page(int dir)
     {
         _offset = Math.Clamp(_offset + dir * Step, 0, Max);
-        Shift.BeginAnimation(TranslateTransform.XProperty,
-            new DoubleAnimation(-_offset, TimeSpan.FromMilliseconds(650)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut } });
+        Montar(_offset);
+        var anim = new DoubleAnimation(-_offset, TimeSpan.FromMilliseconds(650)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut } };
+        // terminada a animação, deixa a página seguinte montada (com o PC parado) para o próximo clique não travar
+        anim.Completed += (_, _) => Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background, () => Montar(_offset + Step));
+        Shift.BeginAnimation(TranslateTransform.XProperty, anim);
         UpdateArrows();
     }
 
