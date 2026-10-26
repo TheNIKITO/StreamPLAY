@@ -1,0 +1,12 @@
+.gradle/
+.kotlin/
+build/
+app/build/
+dist/
+local.properties
+*.iml
+.idea/
+# chave de assinatura do APK: nunca no GitHub (fica em %USERPROFILE%\.streamplay)
+*.jks
+*.keystore
+assinatura.properties

@@ -10,13 +10,13 @@
     <AssemblyName>StreamPLAY</AssemblyName>
     <RootNamespace>StreamPLAY</RootNamespace>
     <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
-    <Version>1.2.3</Version>
+    <Version>1.2.4</Version>
     <Product>StreamPLAY</Product>
     <Company>TheNIKITO</Company>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SatelliteResourceLanguages>pt-BR</SatelliteResourceLanguages>
     <NoWarn>CA1416;NU1701</NoWarn>
-    <DefaultItemExcludes>$(DefaultItemExcludes);VlcPack\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);VlcPack\**;android\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>

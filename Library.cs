@@ -189,6 +189,7 @@ public static class M3U
         if (comp != null)
         {
             try { canais = await Ler(comp, conditional: false); }
+            catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { Esquecer(comp); }
             catch (Exception ex) when (ex is HttpRequestException or IOException or TaskCanceledException or UnauthorizedAccessException) { }
         }
         (_fonte, _principal, _canais) = (source, principal, canais);
@@ -227,7 +228,7 @@ public static class M3U
         string text, baseDir;
         if (IsUrl(source))
         {
-            var bytes = await Download(source, conditional);
+            var bytes = conditional ? await Download(source, true) : await BaixarOuSalva(source);
             if (bytes == null) return null;
             text = Decode(bytes);
             baseDir = source;
@@ -285,15 +286,78 @@ public static class M3U
     }
 
     // Lista online: guarda ETag/Last-Modified e o hash do conteúdo de cada link para só baixar e reorganizar quando mudar.
+    // A última cópia de cada link fica salva no PC (com o ETag/Last-Modified/hash): ao abrir o app ele só pergunta
+    // ao servidor se mudou — sem mudança, abre com a cópia e não gasta a cota do Firebase baixando tudo de novo.
     sealed class Versao { public string ETag, LastModified, Hash; }
     static readonly Dictionary<string, Versao> Versoes = new();
 
-    static void Esquecer(string url) { lock (Versoes) Versoes.Remove(url); }
+    static readonly string PastaSalvas = Environment.GetEnvironmentVariable("STREAMPLAY_DATA") is { Length: > 0 }
+        ? Path.Combine(Store.Dir, "listas")
+        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "StreamPLAY", "listas");
+    // a cópia fica criptografada (Protegido: só abre nesta conta do Windows, neste PC)
+    static string Salva(string url) => Path.Combine(PastaSalvas, Hash(url) + ".dat");
+    static string SalvaInfo(string url) => Path.Combine(PastaSalvas, Hash(url) + ".versao");
+
+    static void Esquecer(string url)
+    {
+        lock (Versoes) Versoes.Remove(url);
+        try { File.Delete(Salva(url)); File.Delete(SalvaInfo(url)); } catch { }
+    }
+
+    /// <summary>Conteúdo do link para abrir o app: da internet só se mudou desde a cópia salva; sem internet, a cópia.</summary>
+    static async Task<byte[]> BaixarOuSalva(string url)
+    {
+        try
+        {
+            var novo = await Download(url, conditional: File.Exists(Salva(url)));
+            if (novo != null) return novo;
+            if (LerSalva(url) is { } salva) return salva;
+            Esquecer(url);   // a cópia não abre (de outra conta/PC, ou estragada): baixa tudo de novo
+            return await Download(url, conditional: false);
+        }
+        catch (Exception ex) when (ex is HttpRequestException { StatusCode: null } or TaskCanceledException)
+        {
+            return LerSalva(url) ?? throw ex;   // sem internet: abre com a última cópia
+        }
+    }
+
+    static byte[] LerSalva(string url)
+    {
+        try { return File.Exists(Salva(url)) ? Protegido.Abrir(File.ReadAllBytes(Salva(url))) : null; }
+        catch (IOException) { return null; }
+    }
+
+    static Versao VersaoSalva(string url)
+    {
+        try
+        {
+            if (File.Exists(Salva(url)) && File.ReadAllLines(SalvaInfo(url)) is { Length: 3 } l)
+                return new Versao { ETag = Empty(l[0]), LastModified = Empty(l[1]), Hash = Empty(l[2]) };
+        }
+        catch { }
+        return new Versao();
+    }
+
+    static void Guardar(string url, byte[] bytes, Versao v)
+    {
+        try
+        {
+            Directory.CreateDirectory(PastaSalvas);
+            if (bytes != null)
+            {
+                var tmp = Salva(url) + ".tmp";
+                File.WriteAllBytes(tmp, Protegido.Cifrar(bytes));
+                File.Move(tmp, Salva(url), true);
+            }
+            File.WriteAllLines(SalvaInfo(url), new[] { v.ETag ?? "", v.LastModified ?? "", v.Hash ?? "" });
+        }
+        catch (Exception ex) { App.Log(ex); }
+    }
 
     static async Task<byte[]> Download(string url, bool conditional)
     {
         Versao v;
-        lock (Versoes) { if (!Versoes.TryGetValue(url, out v)) Versoes[url] = v = new Versao(); }
+        lock (Versoes) { if (!Versoes.TryGetValue(url, out v)) Versoes[url] = v = VersaoSalva(url); }
         using var req = new HttpRequestMessage(HttpMethod.Get, url);
         if (conditional && v.ETag != null) req.Headers.TryAddWithoutValidation("If-None-Match", v.ETag);
         if (conditional && v.LastModified != null) req.Headers.TryAddWithoutValidation("If-Modified-Since", v.LastModified);
@@ -304,8 +368,9 @@ public static class M3U
         v.ETag = resp.Headers.ETag?.ToString();
         v.LastModified = resp.Content.Headers.LastModified?.ToString("R");
         var hash = Convert.ToHexString(SHA1.HashData(bytes));
-        if (conditional && hash == v.Hash) return null;
+        if (conditional && hash == v.Hash) { Guardar(url, null, v); return null; }   // mesmo conteúdo: só renova o ETag salvo
         v.Hash = hash;
+        Guardar(url, bytes, v);
         return bytes;
     }
 
