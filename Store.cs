@@ -27,6 +27,8 @@ public class AppData
     public string Login { get; set; }
     public string AcessoId { get; set; }
     public DateTime ContaOk { get; set; }
+    // Código aleatório deste PC no limite de aparelhos (criado na primeira vez).
+    public string Aparelho { get; set; }
 }
 
 public static class Store
@@ -60,6 +62,17 @@ public static class Store
             File.Move(tmp, FilePath, true);
         }
         catch { }
+    }
+
+    /// <summary>Código deste aparelho no limite de aparelhos do PLAYGER (32 letras hexadecimais, criado uma vez).</summary>
+    public static string MeuAparelho()
+    {
+        if (D.Aparelho is not { Length: 32 })
+        {
+            D.Aparelho = Convert.ToHexStringLower(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16));
+            Save();
+        }
+        return D.Aparelho;
     }
 
     public static bool IsFav(string key) => D.Favorites.Contains(key);

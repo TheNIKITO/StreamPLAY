@@ -42,7 +42,7 @@ object Fonte {
     private const val SALVA_CANAIS = "canais.m3u"
 
     // ETag/Last-Modified e o hash do conteúdo de cada link, para só reorganizar quando mudar
-    private class Versao(var etag: String? = null, var lastModified: String? = null, var hash: String? = null)
+    internal class Versao(var etag: String? = null, var lastModified: String? = null, var hash: String? = null)
     private val versoes = HashMap<String, Versao>()
 
     // última leitura de cada arquivo: quando só um muda, o outro não precisa ser baixado/lido de novo
@@ -119,7 +119,7 @@ object Fonte {
      * para poder juntar de novo quando só uma delas mudar. Igual ao M3U.Juntar do PC.
      */
     fun juntar(a: Library, b: Library?): Library {
-        if (b == null || (b.allChannels.isEmpty() && b.allMovies.isEmpty() && b.allSeries.isEmpty())) return a
+        if (b == null || (b.allChannels.isEmpty() && b.allMovies.isEmpty() && b.allSeries.isEmpty() && b.guias.isEmpty())) return a
         val r = Library()
         for (lib in arrayOf(a, b)) {
             for (k in Kind.entries) {
@@ -129,6 +129,7 @@ object Fonte {
             }
             for ((id, e) in lib.episodios) if (!r.episodios.containsKey(id)) r.episodios[id] = e
         }
+        for (g in b.guias + a.guias) if (g !in r.guias) r.guias.add(g)
         for (k in Kind.entries) {
             val mapa = r.mapas[k.ordinal]
             val porNome = HashMap<String, Category>()
@@ -224,7 +225,7 @@ object Fonte {
     }
 
     /** Abre a conexão seguindo redirecionamentos (inclusive http -> https). Com [v], devolve null se não mudou (304). */
-    private fun abrir(endereco: String, v: Versao?): HttpURLConnection? {
+    internal fun abrir(endereco: String, v: Versao?): HttpURLConnection? {
         var url = URL(endereco)
         repeat(6) {
             val c = url.openConnection() as HttpURLConnection

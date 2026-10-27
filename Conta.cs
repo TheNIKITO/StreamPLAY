@@ -41,9 +41,11 @@ public static class Conta
         public DateTime? LiberadoAte { get; init; }
         public DateTime? FaturaVenc { get; init; }
         public double? FaturaValor { get; init; }
+        public int Limite { get; init; }   // limite de aparelhos (0 = sem limite)
     }
 
-    public record Resultado(Estado Estado, string Titulo, string Mensagem, Acesso Acesso, DateTime Hoje);
+    /// <param name="Aparelhos">bloqueado porque o limite de aparelhos está cheio (não é falta de pagamento)</param>
+    public record Resultado(Estado Estado, string Titulo, string Mensagem, Acesso Acesso, DateTime Hoje, bool Aparelhos = false);
 
     public static string IdAcesso(string login, string senha) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes("playger-acesso|" + (login ?? "").Trim().ToLowerInvariant() + "|" + senha)));
@@ -63,13 +65,99 @@ public static class Conta
                 return new(Estado.Invalido, "Login ou senha incorretos", "Confira o login e a senha que você recebeu.", null, hoje);
             if (!resp.IsSuccessStatusCode)
                 return new(Estado.SemConexao, "Servidor indisponível", $"O servidor não respondeu direito (erro {(int)resp.StatusCode}). Tente de novo daqui a pouco.", null, hoje);
-            try { return Avaliar(Ler(await resp.Content.ReadAsStringAsync(ct)), hoje); }
+            Resultado r;
+            try { r = Avaliar(Ler(await resp.Content.ReadAsStringAsync(ct)), hoje); }
             catch (Exception ex)
             {
                 App.Log(ex);
                 return new(Estado.SemConexao, "Resposta inválida", "Não entendi a resposta do servidor. Tente de novo daqui a pouco.", null, hoje);
             }
+            return r.Estado == Estado.Liberado ? await ConferirAparelhos(id, r, ct) : r;
         }
+    }
+
+    // ---------- limite de aparelhos ----------
+    // Cada aparelho se registra em acessos/{id}/aparelhos/{aid} com um nome ("PC – NOME-DO-PC") e a hora do servidor.
+    // Quem não aparece há 30 dias deixa de contar. Com o limite cheio, um aparelho novo não entra até o painel remover
+    // um antigo. Se a conferência falhar (sem internet, servidor fora), o aparelho não é barrado por isso.
+
+    static readonly TimeSpan Inativo = TimeSpan.FromDays(30);
+    static readonly TimeSpan RenovarCada = TimeSpan.FromHours(12);
+    static readonly TimeSpan ConferirCada = TimeSpan.FromHours(1);   // a conta é conferida a cada 15 min; os aparelhos, menos
+    static string _aparelhosOk;
+    static DateTime _aparelhosEm;
+
+    public record Aparelho(string Id, string Nome, DateTimeOffset Visto);
+
+    public static string NomeDoAparelho => "PC – " + Environment.MachineName;
+
+    static async Task<Resultado> ConferirAparelhos(string id, Resultado r, CancellationToken ct)
+    {
+        if (_aparelhosOk == id && DateTime.UtcNow - _aparelhosEm < ConferirCada) return r;
+        try
+        {
+            using var resp = await Http.GetAsync(Base + id + "/aparelhos?pageSize=300&key=" + ChaveApi, ct);
+            if (!resp.IsSuccessStatusCode) return r;
+            var agora = resp.Headers.Date ?? DateTimeOffset.UtcNow;
+            var todos = LerAparelhos(await resp.Content.ReadAsStringAsync(ct));
+            var eu = Store.MeuAparelho();
+            var meu = todos.FirstOrDefault(a => a.Id == eu);
+            var ativos = todos.Where(a => agora - a.Visto < Inativo).ToList();
+            int limite = r.Acesso.Limite;
+            if (limite > 0 && !ativos.Any(a => a.Id == eu) && ativos.Count >= limite)
+            {
+                var contato = string.IsNullOrWhiteSpace(r.Acesso.Negocio) ? "o suporte" : r.Acesso.Negocio;
+                var nomes = string.Join(", ", ativos.OrderByDescending(a => a.Visto).Select(a => a.Nome));
+                string Qtd(int n) => n == 1 ? "1 aparelho" : $"{n} aparelhos";
+                var msg = $"Este login já está em uso em {Qtd(ativos.Count)} ({nomes}) e o seu plano permite {Qtd(limite)}."
+                          + $" Para assistir aqui, peça para {contato} liberar um aparelho.";
+                _aparelhosOk = null;
+                return r with { Estado = Estado.Bloqueado, Titulo = "Limite de aparelhos atingido", Mensagem = msg, Aparelhos = true };
+            }
+            if (meu == null || agora - meu.Visto > RenovarCada || meu.Nome != NomeDoAparelho)
+                if (!await Registrar(id, eu, ct)) return r;   // não conseguiu anotar: confere de novo na próxima
+            _aparelhosOk = id;
+            _aparelhosEm = DateTime.UtcNow;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or KeyNotFoundException or InvalidOperationException) { }
+        return r;
+    }
+
+    // Grava o registro deste aparelho com a hora do servidor (as regras do Firestore só aceitam assim).
+    static async Task<bool> Registrar(string id, string eu, CancellationToken ct)
+    {
+        var raiz = Base[..Base.TrimEnd('/').LastIndexOf('/')];   // .../documents
+        var nome = $"projects/{Projeto}/databases/(default)/documents/acessos/{id}/aparelhos/{eu}";
+        var corpo = JsonSerializer.Serialize(new
+        {
+            writes = new[]
+            {
+                new
+                {
+                    update = new { name = nome, fields = new { nome = new { stringValue = NomeDoAparelho }, tipo = new { stringValue = "pc" } } },
+                    updateTransforms = new[] { new { fieldPath = "visto", setToServerValue = "REQUEST_TIME" } },
+                },
+            },
+        });
+        using var resp = await Http.PostAsync(raiz + ":commit?key=" + ChaveApi, new StringContent(corpo, Encoding.UTF8, "application/json"), ct);
+        return resp.IsSuccessStatusCode;
+    }
+
+    public static List<Aparelho> LerAparelhos(string json)
+    {
+        var l = new List<Aparelho>();
+        using var doc = JsonDocument.Parse(json);
+        if (!doc.RootElement.TryGetProperty("documents", out var docs)) return l;
+        foreach (var d in docs.EnumerateArray())
+        {
+            var f = d.GetProperty("fields");
+            var aid = d.GetProperty("name").GetString();
+            aid = aid[(aid.LastIndexOf('/') + 1)..];
+            var visto = Campo(f, "visto") is { } v && v.TryGetProperty("timestampValue", out var t)
+                        && DateTimeOffset.TryParse(t.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var dt) ? dt : DateTimeOffset.MinValue;
+            l.Add(new Aparelho(aid, Texto(f, "nome") ?? "Aparelho", visto));
+        }
+        return l;
     }
 
     /// <summary>Mesma regra do painel: desativado, bloqueio manual ou fatura vencida além da tolerância.</summary>
@@ -122,6 +210,7 @@ public static class Conta
             LiberadoAte = Data(f, "liberadoAte"),
             FaturaVenc = fatura is { } fa ? Data(fa, "venc") : null,
             FaturaValor = fatura is { } fb ? Numero(fb, "valor") : null,
+            Limite = (int)(Numero(f, "limite") ?? 0),
         };
     }
 

@@ -70,11 +70,14 @@ object Estado {
     private var ultimaConta = 0L
     private var ultimaLista = 0L
     private var ultimaAtualizacao = 0L
+    private var ultimoGuia = 0L
 
     private const val MIN = 60_000L
     private const val CONTA_CADA = 15 * MIN
     private const val LISTA_CADA = 10 * MIN
     private const val ATUALIZA_CADA = 30 * MIN
+    // a grade anda e o arquivo do guia é renovado a cada 6 h: relê de tempos em tempos (como o PC)
+    private const val GUIA_CADA = 30 * MIN
 
     // sem internet, quem já entrou continua usando por até 3 dias desde a última confirmação
     private const val TOLERANCIA = 3 * 24 * 60 * MIN
@@ -87,6 +90,7 @@ object Estado {
         iniciado = true
         app = ctx.applicationContext
         tab = Store.tab
+        Conta.definirAparelho(com.thenikito.streamplay.ui.ehTv(ctx), android.os.Build.MANUFACTURER, android.os.Build.MODEL)
         ultimaConta = agora
         ultimaLista = agora
         ultimaAtualizacao = agora
@@ -112,6 +116,7 @@ object Estado {
         if (!iniciado) return
         if (agora - ultimaConta >= CONTA_CADA) conferirConta()
         if (agora - ultimaLista >= LISTA_CADA) conferirLista()
+        if (agora - ultimoGuia >= GUIA_CADA) carregarGuia()
         if (agora - ultimaAtualizacao >= ATUALIZA_CADA) procurarAtualizacao(manual = false)
     }
 
@@ -150,6 +155,7 @@ object Estado {
 
     private fun definirLista(nova: Library) {
         lib = nova
+        carregarGuia()
         pendente = null
         focoInicialPendente = true
         if (naTelaDeConta) return   // lista recarregou por trás da tela de login: só aparece depois de entrar
@@ -178,6 +184,13 @@ object Estado {
         if (detalhes != null || busca.isNotEmpty() || player != null) { pendente = nova; return }
         definirLista(nova)
         toast("Lista atualizada  •  " + nova.summary)
+    }
+
+    /** Guia de programação dos canais (em segundo plano). */
+    private fun carregarGuia() {
+        val l = lib ?: return
+        ultimoGuia = agora
+        scope.launch { Guia.carregar(Pastas.de(app), l) }
     }
 
     private fun aplicarPendente() {

@@ -182,7 +182,7 @@ fun TelaBloqueio(r: Conta.Resultado) {
     val scope = rememberCoroutineScope()
     val clip = LocalClipboardManager.current
     val pix = r.acesso?.pix
-    val porPagamento = r.acesso?.ativo == true && !r.acesso.manual
+    val porPagamento = r.acesso?.ativo == true && !r.acesso.manual && !r.aparelhos
     val deNovo = remember { FocusRequester() }
     val controle = usandoControle()
     LaunchedEffect(Unit) { if (controle) { delay(200); try { deNovo.requestFocus() } catch (_: Exception) { } } }

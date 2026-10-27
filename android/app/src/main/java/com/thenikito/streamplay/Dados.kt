@@ -29,6 +29,8 @@ object Store {
     var login: String? = null
     var acessoId: String? = null
     var contaOk = 0L
+    /** Código aleatório deste aparelho no limite de aparelhos do PLAYGER (criado na primeira vez). */
+    var aparelho: String? = null
 
     /** De qual lista é a cópia salva no aparelho (para abrir sem internet). */
     var listaSalva: String? = null
@@ -53,6 +55,7 @@ object Store {
         login = j.optString("login").ifEmpty { null }
         acessoId = j.optString("acessoId").ifEmpty { null }
         contaOk = j.optLong("contaOk", 0)
+        aparelho = j.optString("aparelho").ifEmpty { null }
         listaSalva = j.optString("listaSalva").ifEmpty { null }
         lista(j.optJSONArray("favorites"), favorites)
         lista(j.optJSONArray("recent"), recent)
@@ -90,6 +93,7 @@ object Store {
         put("login", login ?: "")
         put("acessoId", acessoId ?: "")
         put("contaOk", contaOk)
+        put("aparelho", aparelho ?: "")
         put("listaSalva", listaSalva ?: "")
         put("favorites", JSONArray(favorites))
         put("recent", JSONArray(recent))
@@ -101,6 +105,12 @@ object Store {
             if (v.show != null) put("show", v.show)
         })
         put("progress", p)
+    }
+
+    fun meuAparelho(): String {
+        aparelho?.takeIf { it.length == 32 }?.let { return it }
+        val b = ByteArray(16).also { java.security.SecureRandom().nextBytes(it) }
+        return b.joinToString("") { "%02x".format(it.toInt() and 0xff) }.also { aparelho = it; save() }
     }
 
     fun isFav(key: String) = favorites.contains(key)

@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -35,6 +36,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -47,6 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.thenikito.streamplay.Estado
+import com.thenikito.streamplay.Guia
 import com.thenikito.streamplay.Item
 import com.thenikito.streamplay.Kind
 import com.thenikito.streamplay.Library
@@ -164,6 +167,9 @@ private fun ItemCategoria(c: CatCanal, selecionada: Boolean, fr: FocusRequester?
 private fun GradeCanais(titulo: String, lista: List<Item>, buscando: Boolean, lib: Library, modifier: Modifier, margem: androidx.compose.ui.unit.Dp, primeiroCanal: FocusRequester) {
     val m = medidas()
     val versao = Store.versao.intValue
+    // guia de programação: "Agora / A seguir" nos cartões, redesenhado a cada meio minuto
+    val comGuia = Guia.versao.intValue >= 0 && Guia.temAlgum
+    val agora = if (comGuia) lembrarAgora(30_000) else 0L
     val estado = rememberLazyGridState()
     LaunchedEffect(titulo) { estado.scrollToItem(0) }
     LazyVerticalGrid(
@@ -200,13 +206,15 @@ private fun GradeCanais(titulo: String, lista: List<Item>, buscando: Boolean, li
             }
         }
         itemsIndexed(lista, key = { _, it -> it.key }) { i, ch ->
-            CartaoCanal(ch, Store.isFav(ch.key) && versao >= 0, if (i == 0) primeiroCanal else null) { Estado.tocar(PlayRequest.forChannel(ch, lista)) }
+            CartaoCanal(ch, Store.isFav(ch.key) && versao >= 0, if (comGuia) agora else null, if (i == 0) primeiroCanal else null) {
+                Estado.tocar(PlayRequest.forChannel(ch, lista))
+            }
         }
     }
 }
 
 @Composable
-private fun CartaoCanal(ch: Item, favorito: Boolean, fr: FocusRequester?, tocar: () -> Unit) {
+private fun CartaoCanal(ch: Item, favorito: Boolean, agora: Long?, fr: FocusRequester?, tocar: () -> Unit) {
     Column(
         Modifier
             .foco(RoundedCornerShape(6.dp), focusRequester = fr, onLongClick = { favoritar(ch) }, onClick = tocar)
@@ -218,7 +226,37 @@ private fun CartaoCanal(ch: Item, favorito: Boolean, fr: FocusRequester?, tocar:
         }
         Text(
             ch.name, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 9.dp),
+            modifier = Modifier.padding(horizontal = 10.dp).padding(top = 9.dp, bottom = if (agora == null) 9.dp else 3.dp),
         )
+        // com guia na lista, todos os cartões reservam as linhas (a grade fica alinhada mesmo sem programação)
+        if (agora != null) {
+            val (a, s) = Guia.agoraESeguir(ch, agora)
+            Column(Modifier.padding(horizontal = 10.dp).padding(bottom = 9.dp)) {
+                Text(
+                    a?.titulo ?: s?.let { "Às ${Guia.hhmm(it.inicio)}: ${it.titulo}" } ?: " ",
+                    color = Cor.Sub, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+                Box(Modifier.padding(top = 5.dp).fillMaxWidth().height(3.dp).background(if (a != null) Color(0xFF4A4A4A) else Color.Transparent)) {
+                    if (a != null) Box(Modifier.fillMaxWidth(a.progresso(agora)).fillMaxHeight().background(Cor.Vermelho))
+                }
+                Text(
+                    if (a != null && s != null) "A seguir ${Guia.hhmm(s.inicio)}: ${s.titulo}" else " ",
+                    color = Cor.Dim, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+        }
     }
+}
+
+/** A hora atual, renovada a cada [intervalo] ms enquanto a tela estiver aberta. */
+@Composable
+internal fun lembrarAgora(intervalo: Long): Long {
+    val t = remember { mutableLongStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(intervalo) {
+        while (true) {
+            delay(intervalo - System.currentTimeMillis() % intervalo)
+            t.longValue = System.currentTimeMillis()
+        }
+    }
+    return t.longValue
 }

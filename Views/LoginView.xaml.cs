@@ -29,7 +29,7 @@ public partial class LoginView : UserControl
         BloqTitulo.Text = r.Titulo;
         BloqMsg.Text = r.Mensagem;
         var pix = r.Acesso?.Pix;
-        bool porPagamento = r.Acesso is { Ativo: true, Manual: false };
+        bool porPagamento = r.Acesso is { Ativo: true, Manual: false } && !r.Aparelhos;
         PixBox.Visibility = porPagamento && !string.IsNullOrWhiteSpace(pix) ? Visibility.Visible : Visibility.Collapsed;
         PixText.Text = pix ?? "";
         DeNovoText.Text = porPagamento ? "Já paguei, verificar de novo" : "Verificar de novo";

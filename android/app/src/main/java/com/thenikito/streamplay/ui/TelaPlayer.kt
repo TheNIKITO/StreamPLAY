@@ -98,6 +98,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.thenikito.streamplay.Estado
+import com.thenikito.streamplay.Guia
 import com.thenikito.streamplay.Item
 import com.thenikito.streamplay.PlayRequest
 import com.thenikito.streamplay.PlayerControle
@@ -350,6 +351,19 @@ private fun Controles(ctl: PlayerControle, play: FocusRequester, seek: FocusRequ
                     Text("  AO VIVO", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     if (r.item.category.isNotEmpty()) Text("  •  ${r.item.category}", color = Cor.Sub, fontSize = 14.sp)
                 }
+                // guia de programação do canal
+                if (Guia.versao.intValue >= 0 && Guia.temAlgum) {
+                    val (a, s) = Guia.agoraESeguir(r.item, lembrarAgora(15_000))
+                    if (a != null) Text(
+                        "Agora: ${a.titulo}  ·  ${a.horario}", color = Color.White, fontSize = if (m.largo) 16.sp else 14.sp,
+                        fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                    if (s != null) Text(
+                        "A seguir: ${s.titulo}  ·  ${Guia.hhmm(s.inicio)}", color = Cor.Sub, fontSize = if (m.largo) 14.sp else 13.sp,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 2.dp),
+                    )
+                    if (a != null || s != null) Spacer(Modifier.height(8.dp))
+                }
             } else {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     BarraTempo(ctl, seek, Modifier.weight(1f))
@@ -507,7 +521,9 @@ private fun InfoPausado(ctl: PlayerControle) {
             Text("Você está assistindo", color = Cor.Sub, fontSize = 15.sp)
             Text(r.title, color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Black, lineHeight = 40.sp, modifier = Modifier.padding(vertical = 6.dp))
             r.episode?.let { Text("${it.label}  \"${it.title}\"", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold) }
-            val plot = r.episode?.plot ?: r.item.plot
+            val programa = if (r.isLive) Guia.agoraESeguir(r.item, System.currentTimeMillis()).first else null
+            programa?.let { Text("Agora: ${it.titulo}  ·  ${it.horario}", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold) }
+            val plot = r.episode?.plot ?: r.item.plot ?: programa?.descricao
             if (!plot.isNullOrBlank()) Text(plot, color = Cor.Sub, fontSize = 15.sp, lineHeight = 22.sp, maxLines = 5, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 12.dp))
         }
         Text("Pausado", color = Cor.Sub, fontSize = 15.sp, modifier = Modifier.align(Alignment.BottomEnd).padding(m.margem))

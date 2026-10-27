@@ -33,6 +33,8 @@ class Item(
     var genre: String? = null
     var rating: String? = null
     var isRelease = false
+    /** Canal: código no guia de programação (tvg-id). */
+    var tvgId: String? = null
 
     /** Nome normalizado, calculado na primeira busca. */
     internal var busca: String? = null
@@ -147,6 +149,8 @@ class Library {
     val allSeries = ArrayList<Item>()
     internal val mapas = arrayOf(HashMap<Long, Item>(), HashMap<Long, Item>(), HashMap<Long, Item>())
     internal val episodios = HashMap<Long, Episode>()
+    /** Links de guia de programação (XMLTV) do cabeçalho: #EXTM3U url-tvg="..." */
+    val guias = ArrayList<String>()
 
     fun cats(k: Kind): ArrayList<Category> = when (k) { Kind.Channel -> channels; Kind.Movie -> movies; Kind.Series -> series }
     fun all(k: Kind): ArrayList<Item> = when (k) { Kind.Channel -> allChannels; Kind.Movie -> allMovies; Kind.Series -> allSeries }
@@ -218,6 +222,7 @@ object M3U {
         "^(.*?)[\\s._\\-–|:]*Temporada\\s*(\\d{1,2})[\\s._\\-–|:]*Epis[oó]dio\\s*(\\d{1,4})(.*)$",
         RegexOption.IGNORE_CASE,
     )
+    private val GUIA_RX = Regex("""(?:url-tvg|x-tvg-url)\s*=\s*"([^"]+)"""", RegexOption.IGNORE_CASE)
     private val DE_RX = Regex("^(de|da|do|das|dos)\\s+", RegexOption.IGNORE_CASE)
 
     private val VIDEO_EXT = arrayOf(".mp4", ".mkv", ".avi", ".mov", ".wmv", ".m4v", ".webm", ".flv", ".mpg", ".mpeg", ".divx")
@@ -253,6 +258,13 @@ object M3U {
             line = line.trim()
             if (line.isEmpty()) continue
             if (line.startsWith("#EXTINF", true)) { inf = line; grp = null; opts = null; continue }
+            if (line.startsWith("#EXTM3U", true)) {
+                // guia de programação: url-tvg="link" (ou x-tvg-url), podendo ter vários separados por vírgula
+                for (g in GUIA_RX.findAll(line))
+                    for (u in g.groupValues[1].split(',').map { it.trim() })
+                        if (isUrl(u) && u !in lib.guias) lib.guias.add(u)
+                continue
+            }
             if (line.startsWith("#EXTGRP:", true)) { grp = line.substring(8).trim(); continue }
             if (line.startsWith("#EXTVLCOPT:", true)) {
                 (opts ?: ArrayList<String>(2).also { opts = it }).add(line.substring(11).trim())
@@ -327,6 +339,7 @@ object M3U {
                 }
                 fill(item, plot, year, genre, rating, backdrop)
                 if (item.logo.isNullOrEmpty()) item.logo = logo
+                if (kind == Kind.Channel && item.tvgId == null) item.tvgId = a(attrs, "tvg-id")
                 if (category.isRelease) item.isRelease = true
                 addTo(category, item)
             }

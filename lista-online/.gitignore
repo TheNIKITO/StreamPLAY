@@ -1,2 +1,6 @@
 .firebase/
 projeto.txt
+tmdb-chave.txt
+tmdb-cache.json
+nao-encontrados.txt
+__pycache__/
