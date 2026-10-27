@@ -30,6 +30,7 @@ public class Item
     public string Genre { get; set; }
     public string Rating { get; set; }
     public string Url { get; set; }
+    public string TvgId { get; set; }   // canal: código no guia de programação (tvg-id)
     public List<string> Options { get; set; } = new();
     public List<string> Categories { get; } = new();
     public List<Episode> Episodes { get; } = new();
@@ -83,7 +84,12 @@ public class Episode
 /// <summary>Cartão exibido nas fileiras/grades (embrulha um item + estado de exibição).</summary>
 public class Card : INotifyPropertyChanged
 {
-    public Card(Item item) { Item = item; _fav = Store.IsFav(item.Key); }
+    public Card(Item item)
+    {
+        Item = item;
+        _fav = Store.IsFav(item.Key);
+        if (item.Kind == Kind.Channel) AtualizarGuia(DateTime.Now);
+    }
     public Item Item { get; }
     public Episode Ep { get; init; }
     public string Name => Item.Name;
@@ -105,6 +111,26 @@ public class Card : INotifyPropertyChanged
     bool _fav;
     public bool IsFav { get => _fav; set { _fav = value; PropertyChanged?.Invoke(this, new(nameof(IsFav))); } }
     public event PropertyChangedEventHandler PropertyChanged;
+
+    // ---- guia de programação (cartões de canal) ----
+    public bool TemGuia { get; private set; }
+    public string Agora { get; private set; }
+    public double AgoraProgresso { get; private set; }
+    public string Seguinte { get; private set; }
+
+    /// <summary>Atualiza o "Agora / A seguir" deste canal (chamado ao abrir a aba e a cada meio minuto).</summary>
+    public void AtualizarGuia(DateTime agora)
+    {
+        var (a, s) = Guia.AgoraESeguir(Item, agora);
+        bool tem = a != null || s != null;
+        string agoraTxt = a?.Titulo ?? (s != null ? $"Às {s.Inicio:HH:mm}: {s.Titulo}" : null);
+        string seguinte = a != null && s != null ? $"A seguir {s.Inicio:HH:mm}: {s.Titulo}" : null;
+        double prog = a?.Progresso(agora) ?? 0;
+        if (tem == TemGuia && agoraTxt == Agora && seguinte == Seguinte && Math.Abs(prog - AgoraProgresso) < 0.005) return;
+        (TemGuia, Agora, Seguinte, AgoraProgresso) = (tem, agoraTxt, seguinte, prog);
+        foreach (var p in new[] { nameof(TemGuia), nameof(Agora), nameof(Seguinte), nameof(AgoraProgresso) })
+            PropertyChanged?.Invoke(this, new(p));
+    }
 }
 
 public class Library
@@ -117,6 +143,8 @@ public class Library
     public List<Item> AllSeries { get; } = new();
     public Dictionary<string, Item> Items { get; } = new();
     public Dictionary<string, Episode> Episodes { get; } = new();
+    /// <summary>Links de guia de programação (XMLTV) do cabeçalho: #EXTM3U url-tvg="..."</summary>
+    public List<string> Guias { get; } = new();
 
     public List<Category> Cats(Kind k) => k == Kind.Channel ? Channels : k == Kind.Movie ? Movies : Series;
     public List<Item> All(Kind k) => k == Kind.Channel ? AllChannels : k == Kind.Movie ? AllMovies : AllSeries;
@@ -248,8 +276,9 @@ public static class M3U
     /// </summary>
     public static Library Juntar(Library a, Library b)
     {
-        if (b == null || b.Items.Count == 0) return a;
+        if (b == null || b.Items.Count == 0 && b.Guias.Count == 0) return a;
         var r = new Library();
+        foreach (var g in b.Guias.Concat(a.Guias)) if (!r.Guias.Contains(g)) r.Guias.Add(g);
         var tipos = new[] { Kind.Channel, Kind.Movie, Kind.Series };
         foreach (var lib in new[] { a, b })
         {
@@ -411,6 +440,14 @@ public static class M3U
             var line = raw.Trim();
             if (line.Length == 0) continue;
             if (line.StartsWith("#EXTINF", StringComparison.OrdinalIgnoreCase)) { inf = line; grp = null; opts = new List<string>(); continue; }
+            if (line.StartsWith("#EXTM3U", StringComparison.OrdinalIgnoreCase))
+            {
+                // guia de programação: url-tvg="link" (ou x-tvg-url), podendo ter vários separados por vírgula
+                foreach (Match g in Regex.Matches(line, @"(?:url-tvg|x-tvg-url)\s*=\s*""([^""]+)""", RegexOptions.IgnoreCase))
+                    foreach (var u in g.Groups[1].Value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                        if (IsUrl(u) && !lib.Guias.Contains(u)) lib.Guias.Add(u);
+                continue;
+            }
             if (line.StartsWith("#EXTGRP:", StringComparison.OrdinalIgnoreCase)) { grp = line[8..].Trim(); continue; }
             if (line.StartsWith("#EXTVLCOPT:", StringComparison.OrdinalIgnoreCase)) { opts.Add(line[11..].Trim()); continue; }
             if (line.StartsWith("#")) continue;
@@ -486,7 +523,8 @@ public static class M3U
                 var key = (k == Kind.Movie ? "mv:" : "ch:") + id;
                 if (!lib.Items.TryGetValue(key, out var item))
                 {
-                    item = new Item { Id = id, Kind = k, Name = name, Logo = logo, Url = url, Options = opts, Order = order++ };
+                    item = new Item { Id = id, Kind = k, Name = name, Logo = logo, Url = url, Options = opts, Order = order++,
+                                      TvgId = k == Kind.Channel ? Empty(A(attrs, "tvg-id")) : null };
                     lib.Items[key] = item;
                     lib.All(k).Add(item);
                 }

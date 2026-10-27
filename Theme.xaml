@@ -569,20 +569,32 @@
 
   <!-- Card de canal -->
   <DataTemplate x:Key="ChannelCard">
-    <Button x:Name="btn" Style="{StaticResource CardBtn}" Tag="play" AutomationProperties.Name="{Binding Name}"
+    <Button x:Name="btn" Style="{StaticResource CardBtn}" Tag="play" AutomationProperties.Name="{Binding Name}" ToolTip="{Binding Seguinte}"
             Height="{Binding ActualWidth, RelativeSource={RelativeSource Self}, Converter={StaticResource Ratio}, ConverterParameter=0.68}">
       <Border x:Name="card" CornerRadius="6" Background="#1E1E1E" BorderBrush="#2C2C2C" BorderThickness="1">
         <Grid>
           <Grid.RowDefinitions>
             <RowDefinition/>
-            <RowDefinition Height="36"/>
+            <RowDefinition Height="Auto" MinHeight="36"/>
           </Grid.RowDefinitions>
           <TextBlock Text="{Binding Initials}" FontSize="30" FontWeight="Bold" Foreground="#4A4A4A"
                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
           <Image local:Img.Decode="220" local:Img.Src="{Binding Logo}" Stretch="Uniform" Margin="22,16,22,4"/>
           <Border Grid.Row="1" Background="#141414" CornerRadius="0,0,6,6">
-            <TextBlock Text="{Binding Name}" Foreground="#E5E5E5" FontSize="13" FontWeight="SemiBold"
-                       VerticalAlignment="Center" Margin="12,0" TextTrimming="CharacterEllipsis"/>
+            <Grid>
+              <StackPanel VerticalAlignment="Center" Margin="12,6">
+                <TextBlock Text="{Binding Name}" Foreground="#E5E5E5" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                <!-- guia de programação: o que está passando agora -->
+                <TextBlock x:Name="agora" Text="{Binding Agora}" Foreground="#9A9A9A" FontSize="11.5" Margin="0,2,0,0"
+                           TextTrimming="CharacterEllipsis" Visibility="Collapsed"/>
+              </StackPanel>
+              <Grid x:Name="barra" VerticalAlignment="Top" Height="3" Visibility="Collapsed">
+                <Border Background="#33FFFFFF"/>
+                <Border Background="#E50914" RenderTransformOrigin="0,0.5">
+                  <Border.RenderTransform><ScaleTransform ScaleX="{Binding AgoraProgresso}"/></Border.RenderTransform>
+                </Border>
+              </Grid>
+            </Grid>
           </Border>
           <Button x:Name="fav" Tag="fav" Style="{StaticResource Plain}" HorizontalAlignment="Right" VerticalAlignment="Top"
                   Width="30" Height="30" Padding="6" Margin="2" Opacity="0" ToolTip="Favoritar">
@@ -602,6 +614,10 @@
         <Setter TargetName="fav" Property="Opacity" Value="1"/>
         <Setter TargetName="star" Property="Fill" Value="#FFC107"/>
         <Setter TargetName="star" Property="Stroke" Value="#FFC107"/>
+      </DataTrigger>
+      <DataTrigger Binding="{Binding TemGuia}" Value="True">
+        <Setter TargetName="agora" Property="Visibility" Value="Visible"/>
+        <Setter TargetName="barra" Property="Visibility" Value="Visible"/>
       </DataTrigger>
     </DataTemplate.Triggers>
   </DataTemplate>

@@ -32,8 +32,8 @@ public partial class PlayerView : UserControl
     volatile float _cache;
     long _lastTime = -1;
     int _retries;
-    DateTime _playingAt, _vigiaEspera;
-    bool _vigiado, _simulado;
+    DateTime _playingAt, _semAudio, _semVideo, _semImagem;   // desde quando cada problema está acontecendo
+    bool _vigiado, _simulado, _audioCorrigido, _videoCorrigido;
     long _reabrirEm = -1;
     string _panel, _aspect = "original";
 
@@ -108,8 +108,8 @@ public partial class PlayerView : UserControl
         _cache = 0;
         _lastTime = -1;
         _startedAt = DateTime.Now;
-        _playingAt = _vigiaEspera = default;
-        _vigiado = false;
+        _playingAt = _semAudio = _semVideo = _semImagem = default;
+        _vigiado = _audioCorrigido = _videoCorrigido = false;
         _simulado = _reabrirEm >= 0;   // na reabertura da vigia, não provoca o defeito de novo
         NextCard.Visibility = ResumeToast.Visibility = ErrorBox.Visibility = Visibility.Collapsed;
         HidePausedInfo();
@@ -173,6 +173,7 @@ public partial class PlayerView : UserControl
         NextBtn.Visibility = _next != null ? Visibility.Visible : Visibility.Collapsed;
         EpisodesBtn.Visibility = series && _req.Item.Episodes.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
         LiveCat.Text = live ? _req.Item.Category : "";
+        AtualizarGuia();
 
         TitleText.Inlines.Clear();
         TitleText.Inlines.Add(new Run(_req.Title) { FontWeight = FontWeights.Bold });
@@ -262,6 +263,7 @@ public partial class PlayerView : UserControl
         long len = _mp.Length, t = _mp.Time;
 
         if (st == VLCState.Playing) { ApplyVolume(); Vigiar(now, t); }
+        if (_req.IsLive && (now - _guiaEm).TotalSeconds >= 15) AtualizarGuia();
         if (st == VLCState.Playing && t > 0 && _lastTime >= 0 && t != _lastTime) _cache = 100;
         _lastTime = t;
         if (st == VLCState.Playing && (now - _startedAt).TotalSeconds > 20) _retries = 0;
@@ -302,6 +304,22 @@ public partial class PlayerView : UserControl
         MainWindow.I.SyncTopmost();
     }
 
+    // ---------- Guia de programação (canais ao vivo) ----------
+
+    DateTime _guiaEm;
+
+    void AtualizarGuia()
+    {
+        _guiaEm = DateTime.Now;
+        if (!_req.IsLive) { LiveGuia.Text = ""; return; }
+        var (a, s) = Guia.AgoraESeguir(_req.Item, _guiaEm);
+        var partes = new List<string>();
+        if (a != null) partes.Add($"Agora: {a.Titulo}  ·  {a.Horario}");
+        if (s != null) partes.Add($"A seguir: {s.Titulo}  ·  {s.Inicio:HH:mm}");
+        LiveGuia.Text = string.Join("      ", partes);
+        LiveGuia.ToolTip = a?.Descricao;
+    }
+
     // ---------- Vigia dos primeiros segundos ----------
     // Alguns arquivos abrem sem faixa de áudio escolhida, ou com o vídeo sem aparecer (tela preta com som).
     // Nos primeiros segundos o player confere e corrige: escolhe o áudio (de preferência em português) e, se o
@@ -318,43 +336,55 @@ public partial class PlayerView : UserControl
         App.Log($"Teste: defeito '{Defeito}' provocado (áudio {_mp.AudioTrack}/{_mp.AudioTrackCount}, vídeo {_mp.VideoTrack}/{_mp.VideoTrackCount}).");
     }
 
-    // Vigia até o vídeo ter tocado 8 s de verdade (ou 40 s de relógio, se a internet estiver travando).
+    // Vigia até o vídeo ter tocado 12 s de verdade (ou 40 s de relógio, se a internet estiver travando).
     void Vigiar(DateTime now, long t)
     {
         if (_vigiado || _playingAt == default) return;
         double s = (now - _playingAt).TotalSeconds;
         if (Defeito != null && !_simulado && s >= 0.8) { _simulado = true; SimularDefeito(); }
-        if (s < 1.5 || now < _vigiaEspera) return;
-        if (t > 8000 || s > 40) _vigiado = true;
+        if (s < 1.5) return;
+        if (t > 12000 || s > 40) _vigiado = true;
         // Só mexe nas faixas depois que o vídeo começou a andar: antes disso o VLC ainda pode estar carregando os
         // decodificadores (na primeira vez demora, por causa do antivírus) e a faixa aparece como "nenhuma".
         bool andando = t > 1500 || s > 12;
+        // Em stream adaptativo (.m3u8) as faixas entram e saem sozinhas (troca de qualidade, áudio chegando antes
+        // do vídeo); o defeito de faixa "desligada" que a vigia corrige é de arquivo (.mp4/.mkv). Lá ela não mexe.
+        bool adaptativo = _req.Url.Split('?')[0].EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase);
+        if (adaptativo) andando = false;
+        // Links .m3u8 trocam de qualidade sozinhos e, na troca, a faixa some por um instante. Mexer nesse instante
+        // reiniciava a imagem (piscada preta). Por isso cada problema precisa durar 3 s seguidos, e cada correção
+        // acontece no máximo uma vez por vídeo.
+        static bool Durou(bool agora, ref DateTime desde, DateTime now)
+        {
+            if (!agora) { desde = default; return false; }
+            if (desde == default) desde = now;
+            return (now - desde).TotalSeconds >= 3;
+        }
         try
         {
             if (_mp.Mute) _mp.Mute = false;
-            if (andando && _mp.AudioTrack == -1 && _mp.AudioTrackCount > 0 && MelhorAudio() is int a)
+            if (!_audioCorrigido && Durou(andando && _mp.AudioTrack == -1 && _mp.AudioTrackCount > 0, ref _semAudio, now) && MelhorAudio() is int a)
             {
+                _audioCorrigido = true;
                 _mp.SetAudioTrack(a);
                 App.Log($"Vigia do player: abriu sem faixa de áudio; escolhi a faixa {a}. {_req.Url}");
-                _vigiaEspera = now.AddSeconds(3);   // dá tempo da troca fazer efeito antes de conferir de novo
-                _vigiado = false;
                 return;
             }
 
             if (_mp.VideoTrackCount > 0)
             {
-                if (_mp.VideoTrack == -1)
+                if (!_videoCorrigido && Durou(andando && _mp.VideoTrack == -1, ref _semVideo, now))
                 {
-                    if (andando && SafeTracks(() => _mp.VideoTrackDescription).Where(x => x.Id != -1).Select(x => (int?)x.Id).FirstOrDefault() is int v)
+                    if (SafeTracks(() => _mp.VideoTrackDescription).Where(x => x.Id != -1).Select(x => (int?)x.Id).FirstOrDefault() is int v)
                     {
+                        _videoCorrigido = true;
                         _mp.SetVideoTrack(v);
                         App.Log($"Vigia do player: abriu sem faixa de vídeo; escolhi a faixa {v}. {_req.Url}");
-                        _vigiaEspera = now.AddSeconds(3);
-                        _vigiado = false;
                         return;
                     }
                 }
-                else if ((Defeito == "vout" ? 0 : _mp.VoutCount) == 0 && s > 3 && t > 1500 && SemAceleracao.Add(_req.Url.Trim()))
+                else if (Durou(_mp.VideoTrack != -1 && (Defeito == "vout" ? 0 : _mp.VoutCount) == 0 && t > 1500, ref _semImagem, now)
+                         && SemAceleracao.Add(_req.Url.Trim()))
                 {
                     // tem vídeo e o tempo está andando, mas nada aparece na tela
                     App.Log($"Vigia do player: vídeo não apareceu; reabrindo em {t / 1000} s sem aceleração. {_req.Url}");

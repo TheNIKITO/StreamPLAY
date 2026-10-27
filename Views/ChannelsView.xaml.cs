@@ -21,6 +21,9 @@ public partial class ChannelsView : UserControl, IPage
     string _search;
     int _cols;
     readonly DispatcherTimer _resizeTimer = new() { Interval = TimeSpan.FromMilliseconds(120) };
+    // guia de programação: os cartões na tela e o relógio que atualiza o "Agora" deles
+    List<Card> _cards = new();
+    readonly DispatcherTimer _guiaTimer = new() { Interval = TimeSpan.FromSeconds(30) };
 
     public ChannelsView(Library lib)
     {
@@ -30,7 +33,16 @@ public partial class ChannelsView : UserControl, IPage
         AddHandler(ButtonBase.ClickEvent, new RoutedEventHandler(OnClick));
         _resizeTimer.Tick += (_, _) => { _resizeTimer.Stop(); if (Cols() != _cols) Show(keepScroll: true); };
         ChGrid.SizeChanged += (_, _) => { _resizeTimer.Stop(); _resizeTimer.Start(); };
+        _guiaTimer.Tick += (_, _) => AtualizarGuia();
+        Loaded += (_, _) => { Guia.Mudou += AtualizarGuia; _guiaTimer.Start(); AtualizarGuia(); };
+        Unloaded += (_, _) => { Guia.Mudou -= AtualizarGuia; _guiaTimer.Stop(); };
         BuildCats(null);
+    }
+
+    void AtualizarGuia()
+    {
+        var agora = DateTime.Now;
+        foreach (var c in _cards) c.AtualizarGuia(agora);
     }
 
     void BuildCats(string selectKey)
@@ -81,7 +93,8 @@ public partial class ChannelsView : UserControl, IPage
                 : _lib.AllChannels.Count == 0
                     ? new MessageVM { Title = "Nenhum canal na sua lista ainda", Text = "Adicione canais no seu arquivo .m3u com group-title=\"CANAIS | Esportes\" (ou só o nome do grupo, ex.: \"Esportes\"). Salve e o StreamPLAY atualiza sozinho." }
                     : new MessageVM { Title = "Nada por aqui", Text = "" });
-        foreach (var r in UI.Rows(_current.Select(i => new Card(i)), _cols)) rows.Add(new GridRowVM { Cards = r, Cols = _cols });
+        _cards = _current.Select(i => new Card(i)).ToList();
+        foreach (var r in UI.Rows(_cards, _cols)) rows.Add(new GridRowVM { Cards = r, Cols = _cols });
         ChGrid.ItemsSource = rows;
         if (sv != null)
         {

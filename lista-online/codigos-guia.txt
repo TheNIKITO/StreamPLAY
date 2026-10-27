@@ -1,0 +1,187 @@
+﻿CÓDIGOS DO GUIA DE PROGRAMAÇÃO (https://iptv-epg.org/files/epg-br.xml)
+Copie o código para o tvg-id do canal no canais.m3u. Ex.: tvg-id="SporTV2.br"
+(lista tirada em 26/10/2026 — o site pode incluir ou tirar canais com o tempo)
+
+CANAL                                    CÓDIGO (tvg-id)
++ Globosat                               MaisGlobosat.br
+A&E                                      AandE.br
+AMC Brasil                               AMC.br
+AXN                                      AXN.br
+Animal Planet                            AnimalPlanet.br
+Arte 1                                   Arte1.br
+BBB Mosaico                              BBBMosaico.br
+BIS                                      BIS.br
+Baby TV                                  BabyTV.br
+Band Brasil                              BandBrasil.br
+Band Campinas                            BandCampinas.br
+Band News                                BandNews.br
+Band RJ                                  BandRJ.br
+Band SP                                  BandSP.br
+BandSports                               BandSports.br
+CNN                                      CNN.br
+CNN Brasil                               CNNBrasil.br
+CNT                                      CNT.br
+CONMEBOL TV 1                            CONMEBOLTV1.br
+CONMEBOL TV 2                            CONMEBOLTV2.br
+CONMEBOL TV 3                            CONMEBOLTV3.br
+CONMEBOL TV 4                            CONMEBOLTV4.br
+Canal Brasil                             CanalBrasil.br
+Canal Gov                                CanalGov.br
+Canal Rural                              CanalRural.br
+Canal do Boi                             CanaldoBoi.br
+Canção Nova HD                           CancaoNova.br
+Cartoon Network                          CartoonNetwork.br
+Cartoonito                               Cartoonito.br
+Chef TV                                  ChefTV.br
+Cinemax                                  Cinemax.br
+Combate                                  Combate.br
+Comedy Central                           ComedyCentral.br
+Cultura                                  Cultura.br
+Curta!                                   Curta.br
+DOGTV                                    DOGTV.br
+Discovery                                DiscoveryChannel.br
+Discovery Civilization                   DiscoveryCivilization.br
+Discovery Home & Health                  DiscoveryHomeandHealth.br
+Discovery Kids                           DiscoveryKids.br
+Discovery Science                        DiscoveryScience.br
+Discovery Theater                        DiscoveryTheater.br
+Discovery Turbo                          DiscoveryTurbo.br
+Discovery World                          DiscoveryWorld.br
+Disney Channel                           DisneyChannel.br
+Disney Junior                            DisneyJunior.br
+Disney XD                                DisneyXD.br
+E!                                       E.br
+EPTV Campinas                            EPTVCampinas.br
+EPTV Ribeirão Preto                      EPTVRibeiraoPreto.br
+ESPN                                     ESPN.br
+ESPN 2                                   ESPN2.br
+ESPN 3                                   ESPN3.br
+ESPN 4                                   ESPN4.br
+ESPN 5                                   ESPN5.br
+ESPN 6                                   ESPN6.br
+ESPN Plus                                ESPNPlus.br
+FIFA+                                    FIFA+.br
+FX                                       FX.br
+FashionTV                                FashionTV.br
+FishTV                                   FishTV.br
+Food Network                             FoodNetwork.br
+Fox News Channel                         FoxNewsChannel.br
+Futura                                   Futura.br
+GE TV                                    GETV.br
+GNT HD                                   GNT.br
+Globo Anhanguera                         GloboAnhanguera.br
+Globo Brasil                             GloboBrasil.br
+Globo RJ                                 GloboRJ.br
+Globo SP                                 GloboSP.br
+Globo TV Internacional                   GloboInternacional.br
+GloboNews                                GloboNews.br
+Gloob                                    Gloob.br
+Gloobinho                                Gloobinho.br
+HBO                                      HBO.br
+HBO 2                                    HBO2.br
+HBO Family                               HBOFamily.br
+HBO Mundi                                HBOMundi.br
+HBO Plus                                 HBOPlus.br
+HBO Pop                                  HBOPop.br
+HBO Signature                            HBOSignature.br
+HBO Xtreme                               HBOXtreme.br
+HGTV                                     HGTV.br
+History 2                                History2.br
+History Channel                          HistoryChannel.br
+Investigação Discovery                   InvestigacaoDiscovery.br
+Jovem Pan News                           JovemPanNews.br
+Lifetime HD                              Lifetime.br
+MTV                                      MTV.br
+MTV Live                                 MTVLive.br
+Megapix                                  Megapix.br
+Multishow                                Multishow.br
+Music Box Brasil                         MusicBoxBrasil.br
+NHK                                      NHK.br
+Nat Geo Kids HD                          NatGeoKids.br
+NatGeo Wild                              NatGeoWild.br
+National Geographic                      NationalGeographic.br
+Nick                                     Nick.br
+Nick Jr                                  NickJr.br
+Off HD                                   Off.br
+Paramount Channel                        ParamountChannel.br
+Polishop TV                              PolishopTV.br
+Premiere 10                              Premiere10.br
+Premiere 2                               Premiere2.br
+Premiere 3                               Premiere3.br
+Premiere 4                               Premiere4.br
+Premiere 5                               Premiere5.br
+Premiere 6                               Premiere6.br
+Premiere 7                               Premiere7.br
+Premiere 8                               Premiere8.br
+Premiere 9                               Premiere9.br
+Premiere Clubes                          PremiereClubes.br
+Prime Box Brazil                         PrimeBoxBrazil.br
+RIT TV                                   RITtv.br
+Record News                              RecordNews.br
+Record TV Goiás                          RecordTVGoiás.br
+Record TV RJ                             RecordTVRJ.br
+RecordTV Brasil                          RecordTVBrasil.br
+RecordTV International                   RecordTVInternational.br
+RecordTV SP                              RecordTVSP.br
+Rede Brasil                              RedeBrasil.br
+Rede Gospel                              RedeGospel.br
+Rede Vida                                RedeVida.br
+RedeTV!                                  RedeTV.br
+RedeTV! RJ                               RedeTVRJ.br
+RedeTV! SP                               RedeTVSP.br
+SBT Brasil                               SBTBrasil.br
+SBT RJ                                   SBTRJ.br
+SBT SP                                   SBTSP.br
+Sabor & Arte                             SaborandArte.br
+Shoptime                                 Shoptime.br
+Smithsonian                              Smithsonian.br
+Sony                                     SonyChannel.br
+Space                                    Space.br
+SporTV                                   SporTV.br
+SporTV2                                  SporTV2.br
+SporTV3                                  SporTV3.br
+Star Action                              FOXPremiumAction.br
+Star Channel                             StarChannel.br
+Star Hitz                                FOXPremium1.br
+Star Hitz 2                              FOXPremium2.br
+Star Life                                StarLife.br
+Studio Universal                         StudioUniversal.br
+TBS                                      TBS.br
+TCM                                      TCM.br
+TLC HD                                   TLC.br
+TNT                                      TNT.br
+TNT Series                               TNTSeries.br
+TV A Crítica                             TVACritica.br
+TV Aparecida                             TVAparecida.br
+TV Brasil                                TVBrasil.br
+TV Cabo Branco                           TVCaboBranco.br
+TV Camara                                TVCamara.br
+TV Climatempo                            Climatempo.br
+TV Gazeta                                TVGazeta.br
+TV Gazeta Alagoas                        TVGazetaAlagoas.br
+TV Justica                               TVJustica.br
+TV Novo Tempo                            TVNovoTempo.br
+TV Ra Tim Bum                            TVRaTimBum.br
+TV Senado                                TVSenado.br
+TV TEM Sorocaba                          TVTEMSorocaba.br
+TV Tribuna Santos                        TVTribunaSantos.br
+TV Vanguarda São Jose dos Campos         TVVanguardaSaoJosedosCampos.br
+Telecine Action                          TelecineAction.br
+Telecine Cult                            TelecineCult.br
+Telecine Fun                             TelecineFun.br
+Telecine Pipoca                          TelecinePipoca.br
+Telecine Premium                         TelecinePremium.br
+Telecine Touch                           TelecineTouch.br
+Tooncast                                 Tooncast.br
+Travel Box Brazil                        TravelBoxBrazil.br
+TruTV                                    TruTV.br
+UOL                                      UOL.br
+USA                                      USA.br
+Universal                                Universal.br
+VH 1 Megahits                            VH1Megahits.br
+VH1                                      VH1.br
+Viva                                     Viva.br
+Warner Channel                           WarnerChannel.br
+WooHoo                                   WooHoo.br
+ZooMoo                                   ZooMoo.br
+film&arts                                filmandarts.br

@@ -68,6 +68,10 @@ public partial class MainWindow : Window
             TesteRolagem.Talvez(this);
         };
         _contaTimer.Tick += async (_, _) => await ConferirConta();
+        // guia de programação: relê a cada 30 min (a grade anda e o arquivo é renovado a cada 6 h)
+        var guiaTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(30) };
+        guiaTimer.Tick += (_, _) => { if (Lib != null) _ = Guia.CarregarAsync(Lib); };
+        guiaTimer.Start();
         Activated += async (_, _) => { if (DateTime.Now - _ultimaConta > TimeSpan.FromTicks(Math.Min(ContaEvery.Ticks, TimeSpan.FromMinutes(10).Ticks))) await ConferirConta(); };
         _updateTimer.Tick += async (_, _) => await CheckUpdates(manual: false);
         StateChanged += (_, _) => MaxBtn.Content = WindowState == WindowState.Maximized && !_fullscreen ? "" : "";
@@ -106,6 +110,7 @@ public partial class MainWindow : Window
     void SetLibrary(Library lib)
     {
         Lib = lib;
+        _ = Guia.CarregarAsync(lib);   // guia de programação dos canais (em segundo plano)
         _movies = _series = null;
         _channels = null;
         if (NaTelaDeConta) return;   // lista recarregou por trás da tela de login: só aparece depois de entrar
