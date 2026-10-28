@@ -115,7 +115,9 @@ fun Modifier.foco(
         )
 }
 
-/** Botão no estilo da Netflix: branco (principal) ou cinza translúcido; com o controle, fica branco quem tem o foco. */
+/**
+ * Botão: o principal é vermelho, o outro é contornado. Com o controle, quem tem o foco fica branco (dá para ver de longe).
+ */
 @Composable
 fun Botao(
     texto: String,
@@ -128,17 +130,17 @@ fun Botao(
     tamanhoTexto: TextUnit = 16.sp,
 ) {
     var focado by remember { mutableStateOf(false) }
-    val controle = usandoControle()
-    val claro = focado || (primario && !controle)
-    val fundo = if (claro) Color.White else Cor.Cinza
-    val frente = if (claro) Color.Black else Color.White
+    val forma = RoundedCornerShape(6.dp)
+    val fundo = if (focado) Color.White else if (primario) Cor.Vermelho else Color(0x660D0D11)
+    val frente = if (focado) Color.Black else Color.White
     Row(
         modifier
-            .foco(RoundedCornerShape(4.dp), escala = 1.06f, borda = false, focusRequester = focusRequester, aoFocar = { focado = it }) {
+            .foco(forma, escala = 1.06f, borda = false, focusRequester = focusRequester, aoFocar = { focado = it }) {
                 if (habilitado) onClick()
             }
             .background(fundo.copy(alpha = if (habilitado) fundo.alpha else fundo.alpha * 0.5f))
-            .padding(horizontal = 18.dp, vertical = 9.dp),
+            .then(if (!primario && !focado) Modifier.border(1.5.dp, Color(0x8CFFFFFF), forma) else Modifier)
+            .padding(horizontal = 20.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
     ) {
@@ -195,7 +197,11 @@ private val paleta = listOf(
     Color(0xFFA0662F), Color(0xFF2E7C8E), Color(0xFFA03E6E), Color(0xFF5D6B2F),
 )
 
-/** Capa / logotipo. Sem imagem (ou se ela não abrir), mostra o nome sobre um fundo colorido. */
+/**
+ * Capa / logotipo. Sem imagem (ou se ela não abrir), mostra o nome sobre um fundo colorido.
+ * crop = false: a imagem inteira (logotipos de canal). miniatura: baixa a imagem minúscula e estica — vira um fundo
+ * desfocado sem o efeito de desfoque (Modifier.blur pesa em TV box fraco e nem existe antes do Android 12).
+ */
 @Composable
 fun Imagem(
     url: String?,
@@ -204,6 +210,7 @@ fun Imagem(
     crop: Boolean = true,
     tamanhoNome: TextUnit = 14.sp,
     padding: Dp = 0.dp,
+    miniatura: Boolean = false,
 ) {
     var falhou by remember(url) { mutableStateOf(url.isNullOrBlank()) }
     val base = paleta[((nome ?: "").hashCode() and 0x7fffffff) % paleta.size]
@@ -218,8 +225,10 @@ fun Imagem(
                 modifier = Modifier.padding(8.dp),
             )
         } else {
+            val ctx = androidx.compose.ui.platform.LocalContext.current
             AsyncImage(
-                model = url, contentDescription = nome,
+                model = if (miniatura) remember(url) { coil.request.ImageRequest.Builder(ctx).data(url).size(24, 36).build() } else url,
+                contentDescription = nome,
                 contentScale = if (crop) ContentScale.Crop else ContentScale.Fit,
                 modifier = Modifier.fillMaxSize().padding(padding),
                 onError = { falhou = true },
@@ -230,8 +239,9 @@ fun Imagem(
 
 @Composable
 fun BarraProgresso(fracao: Float, modifier: Modifier = Modifier, altura: Dp = 3.dp) {
-    Box(modifier.height(altura).background(Color(0xFF5A5A5A))) {
-        Box(Modifier.fillMaxHeight().fillMaxWidth(fracao.coerceIn(0f, 1f)).background(Cor.Vermelho))
+    val forma = RoundedCornerShape(50)
+    Box(modifier.height(altura).clip(forma).background(Color(0xFF3A3A44))) {
+        Box(Modifier.fillMaxHeight().fillMaxWidth(fracao.coerceIn(0f, 1f)).clip(forma).background(Cor.Vermelho))
     }
 }
 
@@ -239,7 +249,7 @@ fun BarraProgresso(fracao: Float, modifier: Modifier = Modifier, altura: Dp = 3.
 fun Selo(texto: String, modifier: Modifier = Modifier) {
     Text(
         texto, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold,
-        modifier = modifier.clip(RoundedCornerShape(3.dp)).background(Cor.Vermelho).padding(horizontal = 7.dp, vertical = 2.dp),
+        modifier = modifier.clip(RoundedCornerShape(4.dp)).background(Cor.Vermelho).padding(horizontal = 7.dp, vertical = 2.dp),
     )
 }
 
@@ -251,21 +261,30 @@ fun Mensagem(titulo: String, texto: String, modifier: Modifier = Modifier) {
     }
 }
 
+/** ▶ STREAMPLAY (play vermelho + STREAM branco + PLAY vermelho), na altura pedida. */
 @Composable
-fun Logo(modifier: Modifier = Modifier) {
-    androidx.compose.foundation.Image(
-        androidx.compose.ui.res.painterResource(com.thenikito.streamplay.R.drawable.logo), "StreamPLAY",
-        modifier = modifier, contentScale = ContentScale.Fit,
-    )
+fun Logo(modifier: Modifier = Modifier, altura: Dp = 30.dp) {
+    val fonte = with(androidx.compose.ui.platform.LocalDensity.current) { (altura * 0.8f).toSp() }
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icones.LogoPlay, null, tint = Cor.Vermelho, modifier = Modifier.size(altura * 1.05f))
+        Spacer(Modifier.width(altura * 0.28f))
+        Text(
+            androidx.compose.ui.text.buildAnnotatedString {
+                append("STREAM")
+                pushStyle(androidx.compose.ui.text.SpanStyle(color = Cor.Vermelho)); append("PLAY"); pop()
+            },
+            color = Color.White, fontSize = fonte, fontWeight = FontWeight.Black, maxLines = 1, softWrap = false,
+        )
+    }
 }
 
-/** "S  F I L M E" acima do título. */
+/** Traço vermelho + "F I L M E" acima do título. */
 @Composable
 fun RotuloTipo(texto: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text("S", color = Cor.Vermelho, fontSize = 22.sp, fontWeight = FontWeight.Black)
-        Spacer(Modifier.width(8.dp))
-        Text(texto, color = Color(0xFFD0D0D0), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        Box(Modifier.size(width = 4.dp, height = 18.dp).clip(RoundedCornerShape(2.dp)).background(Cor.Vermelho))
+        Spacer(Modifier.width(10.dp))
+        Text(texto, color = Color(0xFFE8E8EE), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 

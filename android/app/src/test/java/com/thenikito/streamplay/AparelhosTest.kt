@@ -88,7 +88,22 @@ class AparelhosTest {
         assertEquals(listOf("d".repeat(32)), l.map { it.id })
         assertEquals("Celular – Samsung A54", l[0].nome)
         assertTrue(System.currentTimeMillis() - l[0].visto < 60_000)
+
+        // online: entrar já marca online; o sinal de saída marca offline
+        val doc = "$raiz/acessos/$id/aparelhos/${"d".repeat(32)}"
+        fun online() = (URL(doc).openConnection() as HttpURLConnection).let { h ->
+            if (h.responseCode == 404) null
+            else org.json.JSONObject(h.inputStream.bufferedReader().readText()).getJSONObject("fields").optJSONObject("online")?.optBoolean("booleanValue")
+        }
+        assertEquals(true, online())
+        Conta.sinal(id, false)
+        assertEquals(false, online())
+        Conta.sinal(id, true)
+        assertEquals(true, online())
+        // aparelho removido no painel: o sinal não recria o registro
         dono("DELETE", "acessos/$id/aparelhos/${"d".repeat(32)}")
+        Conta.sinal(id, true)
+        assertEquals(null, online())
         dono("DELETE", "acessos/$id")
     }
 }

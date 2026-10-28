@@ -5,7 +5,7 @@
         Title="StreamPLAY" Icon="Assets/icon.ico"
         Width="1366" Height="820" MinWidth="980" MinHeight="620"
         WindowStartupLocation="CenterScreen" WindowStyle="None" ResizeMode="CanResize"
-        Background="#141414" Foreground="White" FontFamily="Segoe UI"
+        Background="#0D0D11" Foreground="White" FontFamily="Segoe UI"
         TextOptions.TextFormattingMode="Ideal" UseLayoutRounding="True">
 
   <WindowChrome.WindowChrome>
@@ -16,46 +16,103 @@
     <ContentControl x:Name="PageHost" Focusable="False"/>
 
     <!-- Barra superior -->
+    <!-- Barra superior: sempre sólida (sem degradê por cima do banner) e com uma linha vermelha que some nas pontas -->
     <Grid x:Name="TopBar" VerticalAlignment="Top" Height="68" Visibility="Collapsed">
-      <Border IsHitTestVisible="False">
+      <Border x:Name="TopSolid" Background="#0D0D11" IsHitTestVisible="False"/>
+      <Border VerticalAlignment="Bottom" Height="1" IsHitTestVisible="False">
         <Border.Background>
-          <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-            <GradientStop Color="#B3000000" Offset="0"/>
-            <GradientStop Color="#00000000" Offset="1"/>
+          <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+            <GradientStop Color="#00E50914" Offset="0"/>
+            <GradientStop Color="#A6E50914" Offset="0.25"/>
+            <GradientStop Color="#A6E50914" Offset="0.75"/>
+            <GradientStop Color="#00E50914" Offset="1"/>
           </LinearGradientBrush>
         </Border.Background>
       </Border>
-      <Border x:Name="TopSolid" Background="#141414" Opacity="0" IsHitTestVisible="False"/>
-      <DockPanel Margin="56,0,150,0" LastChildFill="True">
-        <TextBlock DockPanel.Dock="Left" Text="STREAMPLAY" FontFamily="{StaticResource LogoFont}" FontSize="34"
-                   Foreground="#E50914" VerticalAlignment="Center" Margin="0,0,38,0" IsHitTestVisible="False">
-          <TextBlock.Effect><DropShadowEffect Color="Black" BlurRadius="10" ShadowDepth="1" Opacity="0.7"/></TextBlock.Effect>
-        </TextBlock>
+      <DockPanel Margin="40,0,150,0" LastChildFill="True">
+        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,40,0" IsHitTestVisible="False">
+          <Viewbox Width="34" Height="34" Margin="0,0,10,0">
+            <Path Data="{StaticResource G.Logo}" Width="24" Height="24" Fill="#E50914"/>
+          </Viewbox>
+          <TextBlock FontSize="27" FontWeight="Black" VerticalAlignment="Center">
+            <Run Text="STREAM" Foreground="White"/><Run Text="PLAY" Foreground="#E50914"/>
+          </TextBlock>
+        </StackPanel>
 
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" WindowChrome.IsHitTestVisibleInChrome="True">
-          <Border x:Name="SearchWrap" Height="38" CornerRadius="2" BorderBrush="White" BorderThickness="0" Background="Transparent" Margin="0,0,10,0">
+          <Border x:Name="SearchWrap" Height="40" CornerRadius="8" BorderBrush="#40FFFFFF" BorderThickness="0" Background="Transparent" Margin="0,0,6,0">
             <StackPanel Orientation="Horizontal">
               <Button x:Name="SearchBtn" Style="{StaticResource TopIcon}" Click="SearchBtn_Click" ToolTip="Buscar (Ctrl+F)"
                       AutomationProperties.Name="Buscar">
-                <Viewbox><Path Style="{StaticResource IcoS}" Data="{StaticResource G.Search}" StrokeThickness="2.2"/></Viewbox>
+                <Viewbox><Path Style="{StaticResource IcoS}" Data="{StaticResource G.Search}" StrokeThickness="2"/></Viewbox>
               </Button>
               <TextBox x:Name="SearchBox" Width="0" Background="Transparent" BorderThickness="0" Foreground="White" CaretBrush="White"
-                       FontSize="15" VerticalContentAlignment="Center" Padding="0,0,8,0" TextChanged="SearchBox_TextChanged"
+                       FontSize="15" VerticalContentAlignment="Center" Padding="0,0,10,0" TextChanged="SearchBox_TextChanged"
                        LostKeyboardFocus="SearchBox_LostFocus" FocusVisualStyle="{x:Null}" AutomationProperties.Name="Texto da busca"/>
             </StackPanel>
           </Border>
-          <Button Style="{StaticResource TopIcon}" Click="Settings_Click" ToolTip="Configurações" AutomationProperties.Name="Configurações" Padding="0">
-            <TextBlock Text="&#xE713;" FontFamily="{StaticResource Glyphs}" FontSize="20" Foreground="White"/>
+          <Grid Margin="0,0,6,0">
+            <Button x:Name="BellBtn" Style="{StaticResource TopIcon}" Click="Bell_Click" ToolTip="Avisos" AutomationProperties.Name="Avisos">
+              <Viewbox><Path Style="{StaticResource IcoS}" Data="{StaticResource G.Bell}" StrokeThickness="1.9"/></Viewbox>
+            </Button>
+            <Border x:Name="BellDot" Width="9" Height="9" CornerRadius="4.5" Background="#E50914" BorderBrush="#0D0D11" BorderThickness="1.5"
+                    HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,8,9,0" IsHitTestVisible="False" Visibility="Collapsed"/>
+          </Grid>
+          <Button x:Name="UserBtn" Style="{StaticResource TopIcon}" Click="User_Click" ToolTip="Minha conta" AutomationProperties.Name="Minha conta" Padding="7">
+            <Viewbox><Path Style="{StaticResource IcoS}" Data="{StaticResource G.User}" StrokeThickness="1.7"/></Viewbox>
           </Button>
         </StackPanel>
 
-        <StackPanel Orientation="Horizontal" VerticalAlignment="Center" WindowChrome.IsHitTestVisibleInChrome="True" HorizontalAlignment="Left">
-          <RadioButton x:Name="NavChannels" Style="{StaticResource Nav}" Checked="Nav_Checked" Content="Canais" Click="Nav_Click" Tag="channels"/>
-          <RadioButton x:Name="NavMovies" Style="{StaticResource Nav}" Checked="Nav_Checked" Content="Filmes" Click="Nav_Click" Tag="movies"/>
-          <RadioButton x:Name="NavSeries" Style="{StaticResource Nav}" Checked="Nav_Checked" Content="Séries" Click="Nav_Click" Tag="series"/>
-          <RadioButton x:Name="NavList" Style="{StaticResource Nav}" Checked="Nav_Checked" Content="Minha lista" Click="Nav_Click" Tag="mylist"/>
+        <StackPanel Orientation="Horizontal" WindowChrome.IsHitTestVisibleInChrome="True" HorizontalAlignment="Left">
+          <RadioButton x:Name="NavHome" Style="{StaticResource Nav}" Checked="Nav_Checked" Content="Início" Click="Nav_Click" Tag="home" local:UI.Icon="{StaticResource G.Home}"/>
+          <RadioButton x:Name="NavChannels" Style="{StaticResource Nav}" Checked="Nav_Checked" Content="Canais" Click="Nav_Click" Tag="channels" local:UI.Icon="{StaticResource G.Live}"/>
+          <RadioButton x:Name="NavMovies" Style="{StaticResource Nav}" Checked="Nav_Checked" Content="Filmes" Click="Nav_Click" Tag="movies" local:UI.Icon="{StaticResource G.Film}"/>
+          <RadioButton x:Name="NavSeries" Style="{StaticResource Nav}" Checked="Nav_Checked" Content="Séries" Click="Nav_Click" Tag="series" local:UI.Icon="{StaticResource G.Tv}"/>
+          <RadioButton x:Name="NavList" Style="{StaticResource Nav}" Checked="Nav_Checked" Content="Minha lista" Click="Nav_Click" Tag="mylist" local:UI.Icon="{StaticResource G.Bookmark}"/>
         </StackPanel>
       </DockPanel>
+
+      <!-- Avisos (sino) -->
+      <Popup x:Name="BellPopup" PlacementTarget="{Binding ElementName=BellBtn}" Placement="Bottom" HorizontalOffset="-300" VerticalOffset="10"
+             StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+        <Border Width="340" Background="#F7141419" BorderBrush="#33FFFFFF" BorderThickness="1" CornerRadius="10" Padding="18,16">
+          <StackPanel>
+            <TextBlock Text="Avisos" FontSize="17" FontWeight="Bold" Foreground="White" Margin="0,0,0,10"/>
+            <TextBlock x:Name="BellEmpty" Text="Nenhum aviso por enquanto." FontSize="14" Foreground="#9A9AA4"/>
+            <ItemsControl x:Name="BellList">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border BorderBrush="#26FFFFFF" BorderThickness="0,0,0,1" Padding="0,9">
+                    <StackPanel>
+                      <TextBlock Text="{Binding Texto}" FontSize="14" Foreground="#EDEDF2" TextWrapping="Wrap"/>
+                      <TextBlock Text="{Binding Quando}" FontSize="12" Foreground="#80808C" Margin="0,3,0,0"/>
+                    </StackPanel>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </Border>
+      </Popup>
+
+      <!-- Minha conta (perfil) -->
+      <Popup x:Name="UserPopup" PlacementTarget="{Binding ElementName=UserBtn}" Placement="Bottom" HorizontalOffset="-260" VerticalOffset="10"
+             StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+        <Border Width="300" Background="#F7141419" BorderBrush="#33FFFFFF" BorderThickness="1" CornerRadius="10" Padding="18,16">
+          <StackPanel>
+            <TextBlock x:Name="UserName" FontSize="17" FontWeight="Bold" Foreground="White" TextTrimming="CharacterEllipsis"/>
+            <TextBlock x:Name="UserLogin" FontSize="13" Foreground="#9A9AA4" Margin="0,2,0,0"/>
+            <TextBlock x:Name="UserVenc" FontSize="13.5" Foreground="#D8D8E0" Margin="0,12,0,0" TextWrapping="Wrap"/>
+            <Border Height="1" Background="#26FFFFFF" Margin="0,14,0,8"/>
+            <Button Style="{StaticResource RowBtn}" Click="UserSettings_Click" Padding="8,9" AutomationProperties.Name="Configurações">
+              <TextBlock Text="Configurações" FontSize="14.5"/>
+            </Button>
+            <Button Style="{StaticResource RowBtn}" Click="UserExit_Click" Padding="8,9" AutomationProperties.Name="Sair da conta">
+              <TextBlock Text="Sair da conta" FontSize="14.5" Foreground="#FF5A62"/>
+            </Button>
+          </StackPanel>
+        </Border>
+      </Popup>
     </Grid>
 
     <!-- Janelas sobrepostas (detalhes, configurações) -->
@@ -91,11 +148,15 @@
     <!-- Abertura -->
     <Grid x:Name="Splash" Background="Black">
       <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-        <TextBlock x:Name="SplashLogo" Text="STREAMPLAY" FontFamily="{StaticResource LogoFont}" FontSize="110" Foreground="#E50914"
-                   HorizontalAlignment="Center" RenderTransformOrigin="0.5,0.5" Opacity="0">
-          <TextBlock.RenderTransform><ScaleTransform x:Name="SplashScale" ScaleX="0.86" ScaleY="0.86"/></TextBlock.RenderTransform>
-          <TextBlock.Effect><DropShadowEffect Color="#E50914" BlurRadius="40" ShadowDepth="0" Opacity="0.55"/></TextBlock.Effect>
-        </TextBlock>
+        <StackPanel x:Name="SplashLogo" Orientation="Horizontal" HorizontalAlignment="Center" RenderTransformOrigin="0.5,0.5" Opacity="0">
+          <StackPanel.RenderTransform><ScaleTransform x:Name="SplashScale" ScaleX="0.86" ScaleY="0.86"/></StackPanel.RenderTransform>
+          <Viewbox Width="96" Height="96" Margin="0,0,22,0">
+            <Path Data="{StaticResource G.Logo}" Width="24" Height="24" Fill="#E50914"/>
+          </Viewbox>
+          <TextBlock FontSize="80" FontWeight="Black" VerticalAlignment="Center">
+            <Run Text="STREAM" Foreground="White"/><Run Text="PLAY" Foreground="#E50914"/>
+          </TextBlock>
+        </StackPanel>
         <TextBlock x:Name="SplashText" Text="Carregando sua lista..." Foreground="#8C8C8C" FontSize="15" HorizontalAlignment="Center" Margin="0,18,0,0" Opacity="0"/>
         <Grid x:Name="SplashBar" Width="320" Height="4" Margin="0,16,0,0" Visibility="Collapsed">
           <Border Background="#33FFFFFF" CornerRadius="2"/>

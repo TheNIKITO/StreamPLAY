@@ -3,7 +3,7 @@
                     xmlns:local="clr-namespace:StreamPLAY">
 
   <!-- Cores (paleta estilo Netflix) -->
-  <SolidColorBrush x:Key="Bg" Color="#141414"/>
+  <SolidColorBrush x:Key="Bg" Color="#0D0D11"/>
   <SolidColorBrush x:Key="Panel" Color="#181818"/>
   <SolidColorBrush x:Key="Card" Color="#2A2A2A"/>
   <SolidColorBrush x:Key="Hover" Color="#333333"/>
@@ -45,6 +45,16 @@
   <Geometry x:Key="G.Star">M12,2.5 L14.9,8.6 L21.5,9.3 L16.6,13.8 L18,20.4 L12,17 L6,20.4 L7.4,13.8 L2.5,9.3 L9.1,8.6 Z</Geometry>
   <Geometry x:Key="G.Gear">M12,8.5 A3.5,3.5 0 1 1 11.99,8.5 Z M12,2.5 V5 M12,19 V21.5 M2.5,12 H5 M19,12 H21.5 M5.3,5.3 L7.1,7.1 M16.9,16.9 L18.7,18.7 M5.3,18.7 L7.1,16.9 M16.9,7.1 L18.7,5.3</Geometry>
   <Geometry x:Key="G.Restart">M4,12 A8,8 0 1 0 6.3,6.3 M4,3.5 V8 H8.5</Geometry>
+  <Geometry x:Key="G.Home">M3.5,11 L12,3.5 L20.5,11 M5.5,9.5 V20.5 H10 V14.5 H14 V20.5 H18.5 V9.5</Geometry>
+  <Geometry x:Key="G.Live">M7.5,8.5 A6.4,6.4 0 0 0 7.5,17.5 M16.5,8.5 A6.4,6.4 0 0 1 16.5,17.5 M4.6,5.6 A10.5,10.5 0 0 0 4.6,20.4 M19.4,5.6 A10.5,10.5 0 0 1 19.4,20.4 M12,11.6 A1.4,1.4 0 1 1 11.99,11.6 Z</Geometry>
+  <Geometry x:Key="G.Film">M3.5,4.5 H20.5 V19.5 H3.5 Z M7.5,4.5 V19.5 M16.5,4.5 V19.5 M3.5,9.5 H7.5 M3.5,14.5 H7.5 M16.5,9.5 H20.5 M16.5,14.5 H20.5</Geometry>
+  <Geometry x:Key="G.Tv">M3,7.5 H21 V20 H3 Z M8,3 L12,7.5 L16,3</Geometry>
+  <Geometry x:Key="G.Bookmark">M6,3.5 H18 V20.5 L12,16 L6,20.5 Z</Geometry>
+  <Geometry x:Key="G.Bell">M6,16.5 V11 A6,6 0 0 1 18,11 V16.5 L19.5,18 H4.5 Z M10,20.8 H14</Geometry>
+  <Geometry x:Key="G.User">M12,3 A9,9 0 1 1 11.99,3 Z M12,7 A3.3,3.3 0 1 1 11.99,7 Z M6.2,18.6 A6.6,6.6 0 0 1 17.8,18.6</Geometry>
+  <Geometry x:Key="G.Logo">M7.2,3.3 C5.6,2.4 4.5,3.1 4.5,4.9 V19.1 C4.5,20.9 5.6,21.6 7.2,20.7 L19.6,13.6 C21.1,12.8 21.1,11.2 19.6,10.4 Z</Geometry>
+  <Geometry x:Key="G.Back10">M12,4.5 A7.5,7.5 0 1 1 5.2,8.8 M12,1.5 L8.8,4.5 L12,7.5</Geometry>
+  <Geometry x:Key="G.Fwd10">M12,4.5 A7.5,7.5 0 1 0 18.8,8.8 M12,1.5 L15.2,4.5 L12,7.5</Geometry>
 
   <Style x:Key="IcoF" TargetType="Path">
     <Setter Property="Width" Value="24"/>
@@ -98,20 +108,22 @@
   </Style>
 
   <Style x:Key="Primary" TargetType="Button" BasedOn="{StaticResource Plain}">
-    <Setter Property="Background" Value="White"/>
-    <Setter Property="Foreground" Value="Black"/>
-    <Setter Property="FontSize" Value="17"/>
-    <Setter Property="FontWeight" Value="SemiBold"/>
-    <Setter Property="Padding" Value="24,9,28,9"/>
-    <Setter Property="local:UI.Radius" Value="4"/>
-  </Style>
-  <Style x:Key="Secondary" TargetType="Button" BasedOn="{StaticResource Plain}">
-    <Setter Property="Background" Value="#B36D6D6E"/>
+    <Setter Property="Background" Value="#E50914"/>
     <Setter Property="Foreground" Value="White"/>
     <Setter Property="FontSize" Value="17"/>
     <Setter Property="FontWeight" Value="SemiBold"/>
-    <Setter Property="Padding" Value="22,9,26,9"/>
-    <Setter Property="local:UI.Radius" Value="4"/>
+    <Setter Property="Padding" Value="26,11,32,11"/>
+    <Setter Property="local:UI.Radius" Value="6"/>
+  </Style>
+  <Style x:Key="Secondary" TargetType="Button" BasedOn="{StaticResource Plain}">
+    <Setter Property="Background" Value="#660D0D11"/>
+    <Setter Property="BorderBrush" Value="#8CFFFFFF"/>
+    <Setter Property="BorderThickness" Value="1.5"/>
+    <Setter Property="Foreground" Value="White"/>
+    <Setter Property="FontSize" Value="17"/>
+    <Setter Property="FontWeight" Value="SemiBold"/>
+    <Setter Property="Padding" Value="22,10,26,10"/>
+    <Setter Property="local:UI.Radius" Value="6"/>
   </Style>
   <Style x:Key="RedBtn" TargetType="Button" BasedOn="{StaticResource Plain}">
     <Setter Property="Background" Value="#E50914"/>
@@ -275,29 +287,42 @@
   </Style>
 
   <!-- Abas do menu superior -->
+  <!-- ícone + texto; a aba aberta fica vermelha com um traço embaixo (local:UI.Icon = desenho do ícone) -->
   <Style x:Key="Nav" TargetType="RadioButton">
     <Setter Property="Foreground" Value="#E5E5E5"/>
-    <Setter Property="FontSize" Value="15"/>
-    <Setter Property="Margin" Value="0,0,22,0"/>
+    <Setter Property="FontSize" Value="16"/>
+    <Setter Property="Margin" Value="0,0,8,0"/>
     <Setter Property="Cursor" Value="Hand"/>
     <Setter Property="Focusable" Value="False"/>
     <Setter Property="GroupName" Value="nav"/>
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="RadioButton">
-          <Border Background="Transparent" Padding="0,8">
-            <ContentPresenter VerticalAlignment="Center"/>
-          </Border>
+          <Grid Background="Transparent">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0">
+              <Viewbox Width="22" Height="22" Margin="0,0,9,0">
+                <Path Data="{TemplateBinding local:UI.Icon}" Width="24" Height="24" StrokeThickness="1.8"
+                      Stroke="{TemplateBinding Foreground}" StrokeLineJoin="Round" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+              </Viewbox>
+              <ContentPresenter VerticalAlignment="Center"/>
+            </StackPanel>
+            <Border x:Name="traco" Height="3" VerticalAlignment="Bottom" Background="#E50914" CornerRadius="1.5" Visibility="Hidden"/>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsChecked" Value="True">
+              <Setter TargetName="traco" Property="Visibility" Value="Visible"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value>
     </Setter>
     <Style.Triggers>
       <Trigger Property="IsMouseOver" Value="True">
-        <Setter Property="Foreground" Value="#B3B3B3"/>
+        <Setter Property="Foreground" Value="White"/>
       </Trigger>
       <Trigger Property="IsChecked" Value="True">
-        <Setter Property="Foreground" Value="White"/>
-        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Foreground" Value="#FF2A35"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
       </Trigger>
     </Style.Triggers>
   </Style>
@@ -531,12 +556,12 @@
     <Button x:Name="btn" Style="{StaticResource CardBtn}" Tag="open" AutomationProperties.Name="{Binding Name}"
             Height="{Binding ActualWidth, RelativeSource={RelativeSource Self}, Converter={StaticResource Ratio}, ConverterParameter=1.5}">
       <Grid>
-        <Border x:Name="art" CornerRadius="4" Background="#262626">
-          <TextBlock Text="{Binding Name}" TextWrapping="Wrap" TextAlignment="Center" VerticalAlignment="Center"
-                     Margin="12" FontSize="16" FontWeight="SemiBold" Foreground="#9A9A9A"/>
+        <Border CornerRadius="6" Background="#1A1A20">
+          <TextBlock x:Name="nome" Text="{Binding Name}" TextWrapping="Wrap" TextAlignment="Center" VerticalAlignment="Center"
+                     Margin="12" FontSize="16" FontWeight="SemiBold" Foreground="#8A8A94"/>
         </Border>
-        <Border CornerRadius="4" local:Img.Decode="240" local:Img.Src="{Binding Logo}"/>
-        <Border x:Name="info" CornerRadius="0,0,4,4" VerticalAlignment="Bottom" Opacity="0" Padding="10,28,10,10">
+        <Border x:Name="capa" CornerRadius="6" local:Img.Decode="240" local:Img.Src="{Binding Logo}"/>
+        <Border x:Name="info" CornerRadius="0,0,6,6" VerticalAlignment="Bottom" Opacity="0" Padding="10,28,10,10">
           <Border.Background>
             <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
               <GradientStop Color="#00000000" Offset="0"/>
@@ -567,6 +592,39 @@
     </DataTemplate.Triggers>
   </DataTemplate>
 
+  <!-- Continuar assistindo: capa inteira com o nome, o episódio e a barra de progresso embaixo -->
+  <DataTemplate x:Key="ContinueCard">
+    <Button x:Name="btn" Style="{StaticResource CardBtn}" Tag="open" AutomationProperties.Name="{Binding Name}">
+      <StackPanel>
+        <Grid Height="{Binding ActualWidth, RelativeSource={RelativeSource Self}, Converter={StaticResource Ratio}, ConverterParameter=1.5}">
+          <Border CornerRadius="6" Background="#1A1A20">
+            <TextBlock x:Name="nome" Text="{Binding Name}" TextWrapping="Wrap" TextAlignment="Center" VerticalAlignment="Center"
+                       Margin="12" FontSize="16" FontWeight="SemiBold" Foreground="#8A8A94"/>
+          </Border>
+          <Border x:Name="capa" CornerRadius="6" local:Img.Decode="240" local:Img.Src="{Binding Logo}"/>
+          <Border x:Name="play" Background="#99000000" CornerRadius="6" Opacity="0">
+            <Border Width="46" Height="46" CornerRadius="23" Background="#E50914" HorizontalAlignment="Center" VerticalAlignment="Center">
+              <Viewbox Width="18" Height="18" Margin="3,0,0,0"><Path Style="{StaticResource IcoF}" Data="{StaticResource G.Play}"/></Viewbox>
+            </Border>
+          </Border>
+        </Grid>
+        <TextBlock Text="{Binding Name}" Foreground="White" FontSize="14" FontWeight="SemiBold" Margin="2,9,2,0" TextTrimming="CharacterEllipsis"/>
+        <TextBlock Text="{Binding Sub}" Foreground="#9A9AA4" FontSize="12.5" Margin="2,2,2,0" TextTrimming="CharacterEllipsis"/>
+        <Grid Height="3" Margin="2,8,2,0">
+          <Border Background="#3A3A44" CornerRadius="1.5"/>
+          <Border Background="#E50914" CornerRadius="1.5" RenderTransformOrigin="0,0.5">
+            <Border.RenderTransform><ScaleTransform ScaleX="{Binding Progress}"/></Border.RenderTransform>
+          </Border>
+        </Grid>
+      </StackPanel>
+    </Button>
+    <DataTemplate.Triggers>
+      <DataTrigger Binding="{Binding IsMouseOver, ElementName=btn}" Value="True">
+        <Setter TargetName="play" Property="Opacity" Value="1"/>
+      </DataTrigger>
+    </DataTemplate.Triggers>
+  </DataTemplate>
+
   <!-- Card de canal -->
   <DataTemplate x:Key="ChannelCard">
     <Button x:Name="btn" Style="{StaticResource CardBtn}" Tag="play" AutomationProperties.Name="{Binding Name}" ToolTip="{Binding Seguinte}"
@@ -580,7 +638,7 @@
           <TextBlock Text="{Binding Initials}" FontSize="30" FontWeight="Bold" Foreground="#4A4A4A"
                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
           <Image local:Img.Decode="220" local:Img.Src="{Binding Logo}" Stretch="Uniform" Margin="22,16,22,4"/>
-          <Border Grid.Row="1" Background="#141414" CornerRadius="0,0,6,6">
+          <Border Grid.Row="1" Background="#0D0D11" CornerRadius="0,0,6,6">
             <Grid>
               <StackPanel VerticalAlignment="Center" Margin="12,6">
                 <TextBlock Text="{Binding Name}" Foreground="#E5E5E5" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>

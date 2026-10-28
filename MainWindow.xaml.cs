@@ -21,7 +21,7 @@ public partial class MainWindow : Window
     public static MainWindow I { get; private set; }
     public Library Lib { get; private set; }
 
-    BrowseView _movies, _series;
+    BrowseView _inicio, _movies, _series;
     ChannelsView _channels;
     string _tab;
     PlayerView _player;
@@ -41,6 +41,11 @@ public partial class MainWindow : Window
     static readonly TimeSpan ContaEvery = int.TryParse(Environment.GetEnvironmentVariable("STREAMPLAY_CONTA_SECONDS"), out var cs) && cs > 0
         ? TimeSpan.FromSeconds(cs) : TimeSpan.FromMinutes(15);
     readonly DispatcherTimer _contaTimer = new() { Interval = ContaEvery };
+    // STREAMPLAY_ONLINE_SECONDS só existe para testes; o normal é avisar o painel a cada 5 minutos
+    static readonly TimeSpan OnlineEvery = int.TryParse(Environment.GetEnvironmentVariable("STREAMPLAY_ONLINE_SECONDS"), out var os) && os > 0
+        ? TimeSpan.FromSeconds(os) : TimeSpan.FromMinutes(5);
+    readonly DispatcherTimer _onlineTimer = new() { Interval = OnlineEvery };
+    string _onlineId;   // conta que está aparecendo como online no painel
     DateTime _ultimaConta;
     bool _verificandoConta;
     bool _restarting, _updating;
@@ -68,6 +73,7 @@ public partial class MainWindow : Window
             TesteRolagem.Talvez(this);
         };
         _contaTimer.Tick += async (_, _) => await ConferirConta();
+        _onlineTimer.Tick += (_, _) => _ = Conta.SinalAsync(_onlineId, true);
         // guia de programação: relê a cada 30 min (a grade anda e o arquivo é renovado a cada 6 h)
         var guiaTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(30) };
         guiaTimer.Tick += (_, _) => { if (Lib != null) _ = Guia.CarregarAsync(Lib); };
@@ -80,8 +86,14 @@ public partial class MainWindow : Window
         Deactivated += (_, _) => Dispatcher.BeginInvoke(SyncTopmost);
         Closing += (_, _) =>
         {
+            // avisa o painel que saiu (fora da thread da janela; espera no máximo 3 s para não travar o fechamento)
+            var id = _onlineId;
+            var saiu = id != null ? Task.Run(() => Conta.SinalAsync(id, false)) : null;
+            _onlineTimer.Stop();
+            _onlineId = null;
             _player?.Shutdown();
             Store.Save();
+            saiu?.Wait(TimeSpan.FromSeconds(3));
             // atualização baixada e não instalada: instala ao fechar (abre já na versão nova da próxima vez)
             if (!_restarting && Updater.Ready != null && Updater.CanInstall()) Updater.Install(restart: false);
         };
@@ -97,7 +109,7 @@ public partial class MainWindow : Window
             var lib = await M3U.LoadAsync(Store.D.Source);
             SetLibrary(lib);
             Watch();
-            if (quiet) Toast("Lista atualizada  •  " + lib.Summary);
+            if (quiet) { Toast("Lista atualizada  •  " + lib.Summary); Avisar("Lista atualizada  •  " + lib.Summary); }
         }
         catch (Exception ex)
         {
@@ -111,11 +123,11 @@ public partial class MainWindow : Window
     {
         Lib = lib;
         _ = Guia.CarregarAsync(lib);   // guia de programação dos canais (em segundo plano)
-        _movies = _series = null;
+        _inicio = _movies = _series = null;
         _channels = null;
         if (NaTelaDeConta) return;   // lista recarregou por trás da tela de login: só aparece depois de entrar
         TopBar.Visibility = Visibility.Visible;
-        Navigate(_tab ?? Store.D.Tab ?? "movies");
+        Navigate(_tab ?? Store.D.Tab ?? "home");
     }
 
     // Lista online (GitHub, Firebase Hosting, Dropbox...): confere novidades a cada 10 min e ao voltar para o app.
@@ -141,6 +153,7 @@ public partial class MainWindow : Window
         _pendingLib = null;
         SetLibrary(lib);
         Toast("Lista atualizada  •  " + lib.Summary);
+        Avisar("Lista atualizada  •  " + lib.Summary);
     }
 
     void Watch()
@@ -180,7 +193,7 @@ public partial class MainWindow : Window
     {
         if (Lib == null || NaTelaDeConta) return;
         TopBar.Visibility = Visibility.Visible;
-        Navigate(_tab ?? Store.D.Tab ?? "movies");
+        Navigate(_tab ?? Store.D.Tab ?? "home");
     }
 
     public async void UseSource(string source)
@@ -242,12 +255,31 @@ public partial class MainWindow : Window
         Store.Save();
         _ultimaConta = DateTime.Now;
         _contaTimer.Start();
+        Online(Store.D.AcessoId);
+    }
+
+    // Aparece como online no painel enquanto a conta está liberada e o app aberto.
+    void Online(string id)
+    {
+        if (id == _onlineId) return;
+        Offline();
+        _onlineId = id;
+        _onlineTimer.Start();
+        _ = Conta.SinalAsync(id, true);
+    }
+
+    void Offline()
+    {
+        if (_onlineId == null) return;
+        _onlineTimer.Stop();
+        _ = Conta.SinalAsync(_onlineId, false);
+        _onlineId = null;
     }
 
     void AvisarVencimento(Conta.Resultado r)
     {
         var aviso = Conta.Aviso(r);
-        if (aviso != null) Dispatcher.BeginInvoke(() => Toast(aviso), DispatcherPriority.Background);
+        if (aviso != null) Dispatcher.BeginInvoke(() => { Toast(aviso); Avisar(aviso); }, DispatcherPriority.Background);
     }
 
     void MostrarConta(Conta.Resultado r)
@@ -260,6 +292,7 @@ public partial class MainWindow : Window
     void ShowLogin(LoginView view)
     {
         _contaTimer.Stop();
+        Offline();
         ContaAtual = null;
         CloseSearch(clear: true);
         TopBar.Visibility = Visibility.Collapsed;
@@ -274,7 +307,7 @@ public partial class MainWindow : Window
     {
         AceitarConta(r);
         PageHost.Content = null;
-        if (Lib != null) { TopBar.Visibility = Visibility.Visible; Navigate(_tab ?? Store.D.Tab ?? "movies"); }
+        if (Lib != null) { TopBar.Visibility = Visibility.Visible; Navigate(_tab ?? Store.D.Tab ?? "home"); }
         else await LoadLibrary();
         AvisarVencimento(r);
     }
@@ -306,6 +339,7 @@ public partial class MainWindow : Window
         _tab = tab;
         Store.D.Tab = tab;
         _navigating = true;
+        NavHome.IsChecked = tab == "home";
         NavChannels.IsChecked = tab == "channels";
         NavMovies.IsChecked = tab == "movies";
         NavSeries.IsChecked = tab == "series";
@@ -317,14 +351,58 @@ public partial class MainWindow : Window
             "channels" => _channels ??= new ChannelsView(Lib),
             "series" => _series ??= new BrowseView(Lib, Kind.Series),
             "mylist" => new BrowseView(Lib, null),
-            _ => _movies ??= new BrowseView(Lib, Kind.Movie),
+            "movies" => _movies ??= new BrowseView(Lib, Kind.Movie),
+            _ => _inicio ??= new BrowseView(Lib, null, home: true),
         };
         (view as IPage)?.Refresh();
         PageHost.Content = view;
-        SetTopSolid(tab == "channels" ? 1 : 0);
     }
 
-    public void SetTopSolid(double v) => TopSolid.Opacity = Math.Clamp(v, 0, 1);
+    // a barra de cima agora é sempre sólida; as páginas ainda avisam a rolagem, mas não muda nada
+    public void SetTopSolid(double v) { }
+
+    // ---------- Avisos (sino) e conta (perfil) ----------
+
+    public record Aviso(string Texto, string Quando);
+    readonly System.Collections.ObjectModel.ObservableCollection<Aviso> _avisos = new();
+
+    /// <summary>Guarda um aviso no sino (mostra o ponto vermelho até abrir). Repetido não entra de novo.</summary>
+    public void Avisar(string texto)
+    {
+        if (string.IsNullOrWhiteSpace(texto) || _avisos.FirstOrDefault()?.Texto == texto) return;
+        _avisos.Insert(0, new Aviso(texto, DateTime.Now.ToString("dd/MM 'às' HH:mm")));
+        while (_avisos.Count > 15) _avisos.RemoveAt(_avisos.Count - 1);
+        BellDot.Visibility = Visibility.Visible;
+    }
+
+    void Bell_Click(object sender, RoutedEventArgs e)
+    {
+        BellList.ItemsSource ??= _avisos;
+        BellEmpty.Visibility = _avisos.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        BellDot.Visibility = Visibility.Collapsed;
+        BellPopup.IsOpen = !BellPopup.IsOpen;
+    }
+
+    void User_Click(object sender, RoutedEventArgs e)
+    {
+        var a = ContaAtual?.Acesso;
+        UserName.Text = !string.IsNullOrWhiteSpace(a?.Nome) ? a.Nome : "Minha conta";
+        UserLogin.Text = string.IsNullOrEmpty(Store.D.Login) ? "" : "Login: " + Store.D.Login;
+        UserVenc.Text = a?.FaturaVenc is DateTime v
+            ? $"Próximo vencimento: {v:dd/MM/yyyy}" + (a.FaturaValor is double val ? $"  •  {Conta.Dinheiro(val)}" : "")
+            : a?.LiberadoAte is DateTime l ? $"Acesso liberado até {l:dd/MM/yyyy}" : "Acesso liberado";
+        UserPopup.IsOpen = !UserPopup.IsOpen;
+    }
+
+    void UserSettings_Click(object sender, RoutedEventArgs e) { UserPopup.IsOpen = false; ShowSettings(); }
+
+    void UserExit_Click(object sender, RoutedEventArgs e)
+    {
+        UserPopup.IsOpen = false;
+        if (MessageBox.Show("Sair da sua conta? Para usar o StreamPLAY de novo, será preciso digitar o login e a senha.", "StreamPLAY",
+                MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+            SairDaConta(null);
+    }
 
     // ---------- Busca ----------
 
@@ -617,6 +695,7 @@ public partial class MainWindow : Window
             : "A atualização já foi baixada. Reinicie para usar, ou ela será instalada quando você fechar o app.";
         UpdateNowBtn.Content = download ? "Baixar no GitHub" : "Reiniciar e atualizar";
         UpdateBanner.Visibility = Visibility.Visible;
+        Avisar(download ? $"StreamPLAY {v} disponível no GitHub." : $"StreamPLAY {v} baixado: será instalado quando você fechar o app.");
     }
 
     public void InstallUpdateNow()

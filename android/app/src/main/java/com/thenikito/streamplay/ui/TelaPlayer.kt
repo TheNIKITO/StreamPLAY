@@ -27,6 +27,7 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -237,8 +238,9 @@ fun TelaPlayer(req: PlayRequest) {
                 Modifier
                     .align(Alignment.TopStart)
                     .padding(start = m.margem, top = if (m.tv) 90.dp else 76.dp)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(Color(0xCC000000))
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Cor.Painel.copy(alpha = 0.95f))
+                    .border(1.dp, Cor.Linha, RoundedCornerShape(10.dp))
                     .padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -258,8 +260,9 @@ fun TelaPlayer(req: PlayRequest) {
                     .align(Alignment.Center)
                     .widthIn(max = 520.dp)
                     .padding(24.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xF0181818))
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Cor.Painel)
+                    .border(1.dp, Cor.Linha, RoundedCornerShape(12.dp))
                     .padding(24.dp),
             ) {
                 Text(e.titulo, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
@@ -318,19 +321,31 @@ private fun Controles(ctl: PlayerControle, play: FocusRequester, seek: FocusRequ
     val m = medidas()
     val r = ctl.req
     Box(Modifier.fillMaxSize()) {
-        // topo: voltar e título
-        Row(
+        // topo: "Voltar" e, embaixo, a capa com o nome e o episódio
+        Column(
             Modifier
                 .fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(Color(0xCC000000), Color.Transparent)))
-                .padding(horizontal = m.margem, vertical = if (m.tv) 28.dp else 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .background(Brush.verticalGradient(0f to Cor.Fundo.copy(alpha = 0.94f), 0.55f to Cor.Fundo.copy(alpha = 0.7f), 1f to Color.Transparent))
+                .padding(horizontal = m.margem)
+                .padding(top = if (m.tv) 24.dp else 12.dp, bottom = 28.dp),
         ) {
-            IconeBotao(Icons.AutoMirrored.Filled.ArrowBack, "Voltar", { ctl.fechar() }, tamanho = 46.dp)
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(r.title, color = Color.White, fontSize = if (m.largo) 20.sp else 17.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                r.episode?.let { Text("${it.label}  ${it.title}", color = Color(0xFFD0D0D0), fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            Botao("Voltar", { ctl.fechar() }, icone = Icons.AutoMirrored.Filled.ArrowBack, tamanhoTexto = 15.sp)
+            Row(Modifier.padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (!r.item.logo.isNullOrBlank()) {
+                    val larg = if (m.largo) 64.dp else 44.dp
+                    Imagem(
+                        r.item.logo, r.item.name,
+                        Modifier.width(larg).aspectRatio(2f / 3f).clip(RoundedCornerShape(6.dp)).border(1.dp, Cor.Linha, RoundedCornerShape(6.dp)),
+                        tamanhoNome = 7.sp,
+                    )
+                    Spacer(Modifier.width(14.dp))
+                }
+                Column(Modifier.weight(1f)) {
+                    Text(r.title, color = Color.White, fontSize = if (m.largo) 24.sp else 18.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    val linha = r.episode?.let { "T${it.season} • E${it.number}   ${it.title}".trimEnd() } ?: if (r.isLive) r.item.category else r.item.meta
+                    if (linha.isNotBlank()) Text(linha, color = Color(0xFFE4E4EA), fontSize = if (m.largo) 15.sp else 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 3.dp))
+                }
             }
         }
 
@@ -339,7 +354,7 @@ private fun Controles(ctl: PlayerControle, play: FocusRequester, seek: FocusRequ
             Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(Color.Transparent, Color(0xE6000000))))
+                .background(Brush.verticalGradient(listOf(Color.Transparent, Cor.Fundo.copy(alpha = 0.92f))))
                 .padding(horizontal = m.margem)
                 .padding(top = 40.dp, bottom = if (m.tv) 28.dp else 12.dp),
         ) {
@@ -441,8 +456,8 @@ private fun BarraTempo(ctl: PlayerControle, fr: FocusRequester, modifier: Modifi
     ) {
         val w = maxWidth
         val alt = if (focado || ctl.arrastando) 6.dp else 4.dp
-        Box(Modifier.fillMaxWidth().height(alt).clip(RoundedCornerShape(2.dp)).background(Color(0x66FFFFFF)))
-        Box(Modifier.width(w * frac).height(alt).background(Cor.Vermelho))
+        Box(Modifier.fillMaxWidth().height(alt).clip(RoundedCornerShape(50)).background(Color(0x4DFFFFFF)))
+        Box(Modifier.width(w * frac).height(alt).clip(RoundedCornerShape(50)).background(Cor.Vermelho))
         val bola = if (focado || ctl.arrastando) 18.dp else 13.dp
         Box(
             Modifier
@@ -450,15 +465,15 @@ private fun BarraTempo(ctl: PlayerControle, fr: FocusRequester, modifier: Modifi
                 .size(bola)
                 .clip(CircleShape)
                 .background(Cor.Vermelho)
-                .then(if (focado) Modifier.border(2.dp, Color.White, CircleShape) else Modifier),
+                .border(2.dp, Color.White, CircleShape),
         )
         if (ctl.arrastando && ctl.duracao > 0) Text(
             tempo((ctl.posArrasto * ctl.duracao).toLong()), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
             modifier = Modifier
                 .offset(x = (w * frac - 28.dp).coerceIn(0.dp, w - 56.dp), y = (-26).dp)
-                .clip(RoundedCornerShape(4.dp))
-                .background(Color(0xE6000000))
-                .padding(horizontal = 6.dp, vertical = 2.dp),
+                .clip(RoundedCornerShape(6.dp))
+                .background(Cor.Painel)
+                .padding(horizontal = 7.dp, vertical = 2.dp),
         )
     }
 }
@@ -507,7 +522,7 @@ private fun Osd(ctl: PlayerControle, modifier: Modifier) {
         visivel?.let { ultimo = it }
         Text(
             ultimo, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold,
-            modifier = Modifier.clip(RoundedCornerShape(8.dp)).background(Color(0xB3000000)).padding(horizontal = 18.dp, vertical = 8.dp),
+            modifier = Modifier.clip(RoundedCornerShape(10.dp)).background(Cor.Painel.copy(alpha = 0.9f)).border(1.dp, Cor.Linha, RoundedCornerShape(10.dp)).padding(horizontal = 18.dp, vertical = 8.dp),
         )
     }
 }
@@ -516,7 +531,7 @@ private fun Osd(ctl: PlayerControle, modifier: Modifier) {
 private fun InfoPausado(ctl: PlayerControle) {
     val r = ctl.req
     val m = medidas()
-    Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Color(0xE6000000), Color.Transparent)))) {
+    Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(listOf(Cor.Fundo.copy(alpha = 0.92f), Color.Transparent)))) {
         Column(Modifier.align(Alignment.CenterStart).padding(start = m.margem * 2).widthIn(max = 560.dp)) {
             Text("Você está assistindo", color = Cor.Sub, fontSize = 15.sp)
             Text(r.title, color = Color.White, fontSize = 36.sp, fontWeight = FontWeight.Black, lineHeight = 40.sp, modifier = Modifier.padding(vertical = 6.dp))
@@ -538,8 +553,9 @@ private fun CartaoProximo(ctl: PlayerControle, modifier: Modifier) {
         modifier
             .padding(end = m.margem, bottom = if (ctl.controles) 130.dp else 40.dp)
             .widthIn(max = 380.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color(0xF0181818))
+            .clip(RoundedCornerShape(12.dp))
+            .background(Cor.Painel)
+            .border(1.dp, Cor.Linha, RoundedCornerShape(12.dp))
             .padding(18.dp),
     ) {
         Text("Próximo episódio", color = Cor.Sub, fontSize = 13.sp)
@@ -548,13 +564,13 @@ private fun CartaoProximo(ctl: PlayerControle, modifier: Modifier) {
             var f by remember { mutableStateOf(false) }
             Box(
                 Modifier
-                    .foco(RoundedCornerShape(4.dp), escala = 1.06f, borda = false, aoFocar = { f = it }) { ctl.playNext() }
-                    .background(if (f) Color.White else Color(0xFFE0E0E0)),
+                    .foco(RoundedCornerShape(6.dp), escala = 1.06f, borda = false, aoFocar = { f = it }) { ctl.playNext() }
+                    .background(if (f) Color.White else Cor.Vermelho),
             ) {
-                if (Store.autoNext) Box(Modifier.matchParentSize().fillMaxWidth(ctl.fracProximo).background(Color(0x40000000)))
+                if (Store.autoNext) Box(Modifier.matchParentSize().fillMaxWidth(ctl.fracProximo).background(Color(0x4D000000)))
                 Row(Modifier.padding(horizontal = 16.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.PlayArrow, null, tint = Color.Black, modifier = Modifier.size(20.dp))
-                    Text("Assistir", color = Color.Black, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 6.dp))
+                    Icon(Icons.Filled.PlayArrow, null, tint = if (f) Color.Black else Color.White, modifier = Modifier.size(20.dp))
+                    Text("Assistir", color = if (f) Color.Black else Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 6.dp))
                 }
             }
             Botao("Ver créditos", { ctl.dispensarCreditos() }, tamanhoTexto = 15.sp)
@@ -571,7 +587,7 @@ private fun Painel(ctl: PlayerControle) {
         Modifier
             .fillMaxHeight()
             .width(if (m.largo) 400.dp else (m.larguraTela * 0.88f))
-            .background(Color(0xF2141414))
+            .background(Cor.Painel.copy(alpha = 0.97f))
             .pointerInput(Unit) { detectTapGestures { } },
     ) {
         when (ctl.painel) {

@@ -158,14 +158,18 @@ object Conta {
     }
 
     // Grava o registro deste aparelho com a hora do servidor (as regras do Firestore só aceitam assim).
-    private fun registrar(id: String, eu: String): Boolean {
+    // soSeExiste: só renova um registro que já existe (o sinal de online não recria um aparelho removido no painel).
+    // comOnline = false: sem o campo "online" (regras antigas do PLAYGER recusam o campo com 403; aí grava como antes).
+    private fun registrar(id: String, eu: String, online: Boolean = true, soSeExiste: Boolean = false, comOnline: Boolean = true): Boolean {
         val raiz = base.trimEnd('/').substringBeforeLast('/')   // .../documents
         val campos = JSONObject()
             .put("nome", JSONObject().put("stringValue", nomeAparelho))
             .put("tipo", JSONObject().put("stringValue", tipoAparelho))
+        if (comOnline) campos.put("online", JSONObject().put("booleanValue", online))
         val escrita = JSONObject()
             .put("update", JSONObject().put("name", "projects/$PROJETO/databases/(default)/documents/acessos/$id/aparelhos/$eu").put("fields", campos))
             .put("updateTransforms", JSONArray().put(JSONObject().put("fieldPath", "visto").put("setToServerValue", "REQUEST_TIME")))
+        if (soSeExiste) escrita.put("currentDocument", JSONObject().put("exists", true))
         val corpo = JSONObject().put("writes", JSONArray().put(escrita)).toString().toByteArray(Charsets.UTF_8)
         val c = URL("$raiz:commit?key=$CHAVE_API").openConnection() as HttpURLConnection
         return try {
@@ -175,9 +179,22 @@ object Conta {
             c.doOutput = true
             c.setRequestProperty("Content-Type", "application/json; charset=utf-8")
             c.outputStream.use { it.write(corpo) }
-            c.responseCode in 200..299
+            val codigo = c.responseCode
+            if (codigo == 403 && comOnline) registrar(id, eu, online, soSeExiste, comOnline = false) else codigo in 200..299
         } finally {
             c.disconnect()
+        }
+    }
+
+    // ---------- online (igual ao Conta.cs do PC) ----------
+    // Com o app na frente, o aparelho avisa a cada 5 min que está online (o painel mostra na aba "Online");
+    // ao sair do app, avisa que saiu. Quem para de avisar (caiu, sem internet) vira offline sozinho no painel.
+
+    /** Avisa o painel que este aparelho está (ou deixou de estar) com o app aberto. Bloqueia: chame fora da thread principal. */
+    fun sinal(id: String, online: Boolean) {
+        try {
+            registrar(id, Store.meuAparelho(), online, soSeExiste = true)
+        } catch (_: Exception) {
         }
     }
 

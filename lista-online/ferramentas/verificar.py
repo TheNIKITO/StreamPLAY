@@ -4,11 +4,12 @@ Verifica os links da lista do StreamPLAY e mostra quais estão quebrados.
 - Canais (.m3u8): abre a lista do canal e confere se o primeiro pedaço de vídeo responde.
 - Filmes e episódios: pede só o começo do arquivo (1 KB), sem baixar o vídeo.
 - Antes de dar um link como quebrado, testa de novo mais duas vezes, alguns minutos depois.
-- Vai devagar de propósito (poucos testes ao mesmo tempo): o fornecedor pode bloquear a conta se forem muitos.
+- Testa 20 links ao mesmo tempo. Se o fornecedor começar a recusar (muitos "acesso negado" ou "não respondeu"
+  que antes não apareciam), diminua com --simultaneos: ele pode bloquear a conta se forem muitos.
 - Nunca mexe na sua lista: gera links-quebrados.html e uma cópia sem os quebrados, para você conferir.
 - Guarda o que já testou em links-cache.json: da próxima vez começa pelos novos e pelos que tinham falhado.
 
-Uso: python verificar.py [--o canais,filmes,series] [--simultaneos 3] [--pausa 0.5] [--espera 120] [--timeout 15]
+Uso: python verificar.py [--o canais,filmes,series] [--simultaneos 20] [--pausa 0.1] [--espera 120] [--timeout 15]
 """
 import argparse
 import html
@@ -212,8 +213,8 @@ def rodar(itens, args, titulo, resultados):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--o", help="canais,filmes,series (sem isso, pergunta)")
-    ap.add_argument("--simultaneos", type=int, default=3, help="testes ao mesmo tempo (padrão 3)")
-    ap.add_argument("--pausa", type=float, default=0.5, help="segundos de pausa depois de cada teste")
+    ap.add_argument("--simultaneos", type=int, default=20, help="testes ao mesmo tempo (padrão 20)")
+    ap.add_argument("--pausa", type=float, default=0.1, help="segundos de pausa depois de cada teste")
     ap.add_argument("--espera", type=float, default=120, help="segundos antes de testar de novo os que falharam")
     ap.add_argument("--timeout", type=float, default=15, help="segundos esperando cada resposta")
     ap.add_argument("--limite", type=int, default=0, help="testa no máximo esse número de links nesta vez (0 = todos)")

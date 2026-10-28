@@ -2,6 +2,7 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vlc="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF"
+             xmlns:local="clr-namespace:StreamPLAY"
              Background="Black">
   <vlc:VideoView x:Name="Video" Background="Black">
     <Grid x:Name="Ui" Background="#01000000" Focusable="True" FocusVisualStyle="{x:Null}"
@@ -52,26 +53,40 @@
       </Border>
 
       <!-- Mensagem rápida (volume, canal...) -->
-      <Border x:Name="Osd" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,34,44,0" Padding="18,10" CornerRadius="6"
-              Background="#CC000000" Opacity="0" IsHitTestVisible="False">
+      <Border x:Name="Osd" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,34,44,0" Padding="18,10" CornerRadius="10"
+              Background="#E6141419" BorderBrush="#33FFFFFF" BorderThickness="1" Opacity="0" IsHitTestVisible="False">
         <TextBlock x:Name="OsdText" FontSize="20" FontWeight="SemiBold"/>
       </Border>
 
       <!-- Controles -->
       <Grid x:Name="Chrome">
-        <Grid x:Name="TopArea" VerticalAlignment="Top" Height="120" Background="Transparent" Tag="bg-top">
+        <Grid x:Name="TopArea" VerticalAlignment="Top" Height="230" Background="Transparent" Tag="bg-top">
           <Rectangle IsHitTestVisible="False">
             <Rectangle.Fill>
               <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                <GradientStop Color="#A6000000" Offset="0"/>
-                <GradientStop Color="#00000000" Offset="1"/>
+                <GradientStop Color="#F00D0D11" Offset="0"/>
+                <GradientStop Color="#B30D0D11" Offset="0.55"/>
+                <GradientStop Color="#000D0D11" Offset="1"/>
               </LinearGradientBrush>
             </Rectangle.Fill>
           </Rectangle>
-          <Button x:Name="BackBtn" Style="{StaticResource PBtn}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="24,18,0,0"
-                  Width="58" Height="58" Click="Back_Click" ToolTip="Voltar" AutomationProperties.Name="Voltar">
-            <Path Style="{StaticResource IcoS}" Data="{StaticResource G.Back}" StrokeThickness="2.2"/>
-          </Button>
+          <StackPanel HorizontalAlignment="Left" VerticalAlignment="Top" Margin="36,22,0,0">
+            <Button x:Name="BackBtn" Style="{StaticResource Plain}" HorizontalAlignment="Left" Padding="14,8,18,8" local:UI.Radius="8"
+                    Background="#59000000" BorderBrush="#33FFFFFF" BorderThickness="1" Click="Back_Click" ToolTip="Voltar (Esc)" AutomationProperties.Name="Voltar">
+              <StackPanel Orientation="Horizontal">
+                <Viewbox Width="20" Height="20" Margin="0,0,9,0"><Path Style="{StaticResource IcoS}" Data="{StaticResource G.Back}" StrokeThickness="2.2"/></Viewbox>
+                <TextBlock Text="Voltar" FontSize="15.5" FontWeight="SemiBold" VerticalAlignment="Center"/>
+              </StackPanel>
+            </Button>
+            <!-- capa + nome do que está passando -->
+            <StackPanel Orientation="Horizontal" Margin="0,18,0,0" IsHitTestVisible="False">
+              <Border x:Name="PosterThumb" Width="72" Height="108" CornerRadius="6" Margin="0,0,18,0" BorderBrush="#33FFFFFF" BorderThickness="1" local:Img.Decode="150"/>
+              <StackPanel VerticalAlignment="Center">
+                <TextBlock x:Name="TitleText" FontSize="28" FontWeight="Bold" TextTrimming="CharacterEllipsis" MaxWidth="760"/>
+                <TextBlock x:Name="EpText" FontSize="16.5" Foreground="#E4E4EA" Margin="0,4,0,0" TextTrimming="CharacterEllipsis" MaxWidth="760"/>
+              </StackPanel>
+            </StackPanel>
+          </StackPanel>
         </Grid>
 
         <Grid VerticalAlignment="Bottom">
@@ -95,15 +110,15 @@
               <Grid x:Name="SeekArea" Background="Transparent" Cursor="Hand"
                     MouseLeftButtonDown="Seek_Down" MouseMove="Seek_Move" MouseLeftButtonUp="Seek_Up"
                     MouseEnter="Seek_Enter" MouseLeave="Seek_Leave">
-                <Border x:Name="SeekRail" Height="4" Background="#66808080" VerticalAlignment="Center"/>
-                <Border x:Name="SeekHover" Height="4" Background="#59FFFFFF" HorizontalAlignment="Left" VerticalAlignment="Center" Width="0"/>
-                <Border x:Name="SeekFill" Height="4" Background="#E50914" HorizontalAlignment="Left" VerticalAlignment="Center" Width="0"/>
-                <Ellipse x:Name="SeekKnob" Width="16" Height="16" Fill="#E50914" HorizontalAlignment="Left" VerticalAlignment="Center"
-                         Margin="-8,0,0,0" RenderTransformOrigin="0.5,0.5">
+                <Border x:Name="SeekRail" Height="5" Background="#4DFFFFFF" VerticalAlignment="Center" CornerRadius="2.5"/>
+                <Border x:Name="SeekHover" Height="5" Background="#59FFFFFF" HorizontalAlignment="Left" VerticalAlignment="Center" Width="0" CornerRadius="2.5"/>
+                <Border x:Name="SeekFill" Height="5" Background="#E50914" HorizontalAlignment="Left" VerticalAlignment="Center" Width="0" CornerRadius="2.5"/>
+                <Ellipse x:Name="SeekKnob" Width="17" Height="17" Fill="#E50914" Stroke="White" StrokeThickness="2" HorizontalAlignment="Left" VerticalAlignment="Center"
+                         Margin="-8.5,0,0,0" RenderTransformOrigin="0.5,0.5">
                   <Ellipse.RenderTransform><ScaleTransform x:Name="KnobScale"/></Ellipse.RenderTransform>
                 </Ellipse>
                 <Canvas IsHitTestVisible="False">
-                  <Border x:Name="SeekTip" Background="#F2262626" CornerRadius="3" Padding="9,4" Canvas.Bottom="26" Visibility="Collapsed">
+                  <Border x:Name="SeekTip" Background="#F2141419" BorderBrush="#33FFFFFF" BorderThickness="1" CornerRadius="6" Padding="10,5" Canvas.Bottom="26" Visibility="Collapsed">
                     <TextBlock x:Name="SeekTipText" FontSize="14" FontWeight="SemiBold"/>
                   </Border>
                 </Canvas>
@@ -163,9 +178,6 @@
                 </Button>
               </StackPanel>
 
-              <TextBlock x:Name="TitleText" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="18"
-                         TextTrimming="CharacterEllipsis" IsHitTestVisible="False"/>
-
               <StackPanel x:Name="RightBtns" Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button x:Name="NextBtn" Style="{StaticResource PBtn}" Click="Next_Click" ToolTip="Próximo episódio (N)" AutomationProperties.Name="Próximo episódio">
                   <Path Style="{StaticResource IcoF}" Data="{StaticResource G.Next}"/>
@@ -196,14 +208,13 @@
 
       <!-- Painéis (áudio/legendas, velocidade, episódios, canais) -->
       <Border x:Name="PanelBox" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,40,112"
-              Background="#F5262626" CornerRadius="6" Visibility="Collapsed">
-        <Border.Effect><DropShadowEffect BlurRadius="30" ShadowDepth="4" Opacity="0.6"/></Border.Effect>
+              Background="#F7141419" BorderBrush="#33FFFFFF" BorderThickness="1" CornerRadius="12" Visibility="Collapsed">
         <ContentControl x:Name="PanelContent" Focusable="False"/>
       </Border>
 
       <!-- Volume -->
       <Border x:Name="VolPop" HorizontalAlignment="Left" VerticalAlignment="Bottom" Width="46" Height="160"
-              Background="#F5262626" CornerRadius="4" Visibility="Collapsed">
+              Background="#F7141419" BorderBrush="#33FFFFFF" BorderThickness="1" CornerRadius="23" Visibility="Collapsed">
         <Grid x:Name="VolArea" Background="Transparent" Margin="0,18" Cursor="Hand"
               MouseLeftButtonDown="Vol_Down" MouseMove="Vol_Move" MouseLeftButtonUp="Vol_Up">
           <Border Width="5" Background="#66808080" CornerRadius="2"/>
@@ -218,7 +229,7 @@
         <Button Style="{StaticResource Secondary}" Content="Assistir créditos" Click="Credits_Click" Margin="0,0,12,0"/>
         <Button x:Name="NextNowBtn" Style="{StaticResource Primary}" Padding="0" Click="Next_Click">
           <Grid>
-            <Border x:Name="NextFill" Background="#C8C8C8" HorizontalAlignment="Left" Width="0" CornerRadius="4"/>
+            <Border x:Name="NextFill" Background="#A8060F" HorizontalAlignment="Left" Width="0" CornerRadius="6"/>
             <StackPanel Orientation="Horizontal" Margin="22,10,26,10">
               <Viewbox Width="20" Height="20" Margin="0,0,10,0"><Path Style="{StaticResource IcoF}" Data="{StaticResource G.Play}"/></Viewbox>
               <TextBlock Text="Próximo episódio" VerticalAlignment="Center"/>
@@ -229,7 +240,7 @@
 
       <!-- Continuando de... -->
       <Border x:Name="ResumeToast" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="40,0,0,132"
-              Background="#F0262626" CornerRadius="4" Padding="18,6,8,6" Visibility="Collapsed">
+              Background="#F2141419" BorderBrush="#33FFFFFF" BorderThickness="1" CornerRadius="10" Padding="18,7,8,7" Visibility="Collapsed">
         <StackPanel Orientation="Horizontal">
           <TextBlock x:Name="ResumeText" FontSize="15" VerticalAlignment="Center"/>
           <Button Style="{StaticResource GhostBtn}" Margin="16,0,0,0" Click="StartOver_Click" Padding="12,6">
@@ -242,7 +253,7 @@
       </Border>
 
       <!-- Erro -->
-      <Border x:Name="ErrorBox" HorizontalAlignment="Center" VerticalAlignment="Center" Background="#F2181818" CornerRadius="8"
+      <Border x:Name="ErrorBox" HorizontalAlignment="Center" VerticalAlignment="Center" Background="#F7141419" BorderBrush="#33FFFFFF" BorderThickness="1" CornerRadius="12"
               Padding="38,30" Visibility="Collapsed" MaxWidth="600">
         <StackPanel>
           <TextBlock x:Name="ErrorTitle" Text="Não foi possível reproduzir" FontSize="26" FontWeight="Bold"/>

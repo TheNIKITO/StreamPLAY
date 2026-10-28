@@ -6,8 +6,9 @@ echo.
 echo  ============================================
 echo     StreamPLAY - verificar links quebrados
 echo  ============================================
-echo   Testa devagar (3 por vez) para o fornecedor
-echo   não bloquear a sua conta. Sua lista não muda:
+echo   Testa 20 links ao mesmo tempo. Se aparecerem
+echo   muitos "acesso negado" de repente, diminua.
+echo   Sua lista não muda:
 echo   sai um relatório e uma cópia sem os quebrados.
 echo.
 where python >nul 2>nul

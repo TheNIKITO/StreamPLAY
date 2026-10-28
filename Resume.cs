@@ -52,26 +52,27 @@ public static class Resume
         return i >= 0 && i + 1 < list.Count ? list[i + 1] : null;
     }
 
-    public static List<Card> ContinueCards(Library lib, Kind kind)
+    /// <param name="kind">null = filmes e séries juntos (página Início)</param>
+    public static List<Card> ContinueCards(Library lib, Kind? kind)
     {
         var cards = new List<Card>();
         var seen = new HashSet<string>();
         foreach (var (key, p) in Store.D.Progress.OrderByDescending(kv => kv.Value.At))
         {
-            if (kind == Kind.Movie && key.StartsWith("mv:"))
+            if (kind != Kind.Series && key.StartsWith("mv:"))
             {
                 var it = lib.Get(key);
                 if (it == null || p.Finished || p.Pos < 20000) continue;
                 cards.Add(new Card(it) { Progress = p.Fraction, Sub = UI.Left(p.Dur - p.Pos), Direct = true });
             }
-            else if (kind == Kind.Series && key.StartsWith("ep:"))
+            else if (kind != Kind.Movie && key.StartsWith("ep:"))
             {
                 if (!lib.Episodes.TryGetValue(key[3..], out var ep) || !seen.Add(ep.Show.Key)) continue;
                 var target = ep;
                 double frac = p.Fraction;
                 if (p.Finished) { target = Next(ep); frac = Store.Watched(target?.Key); if (target == null) continue; }
                 else if (p.Pos < 20000) continue;
-                cards.Add(new Card(ep.Show) { Ep = target, Progress = Math.Max(frac, 0.006), Sub = $"{target.Label}  {target.Title}" });
+                cards.Add(new Card(ep.Show) { Ep = target, Progress = Math.Max(frac, 0.006), Sub = $"T{target.Season} • E{target.Number}" });
             }
             if (cards.Count >= 20) break;
         }

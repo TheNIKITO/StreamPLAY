@@ -124,23 +124,36 @@ public static class Conta
     }
 
     // Grava o registro deste aparelho com a hora do servidor (as regras do Firestore só aceitam assim).
-    static async Task<bool> Registrar(string id, string eu, CancellationToken ct)
+    // soSeExiste: só renova um registro que já existe (o sinal de online não recria um aparelho removido no painel).
+    // comOnline = false: sem o campo "online" (regras antigas do PLAYGER recusam o campo com 403; aí grava como antes).
+    static async Task<bool> Registrar(string id, string eu, CancellationToken ct, bool online = true, bool soSeExiste = false, bool comOnline = true)
     {
         var raiz = Base[..Base.TrimEnd('/').LastIndexOf('/')];   // .../documents
         var nome = $"projects/{Projeto}/databases/(default)/documents/acessos/{id}/aparelhos/{eu}";
-        var corpo = JsonSerializer.Serialize(new
+        var campos = new Dictionary<string, object> { ["nome"] = new { stringValue = NomeDoAparelho }, ["tipo"] = new { stringValue = "pc" } };
+        if (comOnline) campos["online"] = new { booleanValue = online };
+        var escrita = new Dictionary<string, object>
         {
-            writes = new[]
-            {
-                new
-                {
-                    update = new { name = nome, fields = new { nome = new { stringValue = NomeDoAparelho }, tipo = new { stringValue = "pc" } } },
-                    updateTransforms = new[] { new { fieldPath = "visto", setToServerValue = "REQUEST_TIME" } },
-                },
-            },
-        });
+            ["update"] = new { name = nome, fields = campos },
+            ["updateTransforms"] = new[] { new { fieldPath = "visto", setToServerValue = "REQUEST_TIME" } },
+        };
+        if (soSeExiste) escrita["currentDocument"] = new { exists = true };
+        var corpo = JsonSerializer.Serialize(new { writes = new[] { escrita } });
         using var resp = await Http.PostAsync(raiz + ":commit?key=" + ChaveApi, new StringContent(corpo, Encoding.UTF8, "application/json"), ct);
+        if (resp.StatusCode == HttpStatusCode.Forbidden && comOnline) return await Registrar(id, eu, ct, online, soSeExiste, comOnline: false);
         return resp.IsSuccessStatusCode;
+    }
+
+    // ---------- online ----------
+    // Com o app aberto, o aparelho avisa a cada 5 min que está online (o painel mostra na aba "Online");
+    // ao fechar, avisa que saiu. Quem para de avisar (caiu, sem internet) vira offline sozinho no painel.
+
+    /// <summary>Avisa o painel que este aparelho está (ou deixou de estar) com o app aberto. Falhas são ignoradas.</summary>
+    public static async Task SinalAsync(string id, bool online, CancellationToken ct = default)
+    {
+        if (string.IsNullOrEmpty(id)) return;
+        try { await Registrar(id, Store.MeuAparelho(), ct, online, soSeExiste: true); }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException) { }
     }
 
     public static List<Aparelho> LerAparelhos(string json)

@@ -51,9 +51,7 @@ public partial class PlayerView : UserControl
         Ui.MouseWheel += (_, e) => { Vol(e.Delta > 0 ? 5 : -5); e.Handled = true; };
         Ui.PreviewKeyDown += (_, e) => { if (HandleKey(e.Key)) e.Handled = true; };
         Ui.Loaded += (_, _) => NoActivate();
-        Ui.SizeChanged += (_, _) => { LayoutTitle(); if (_aspect == "fill") ApplyAspect(); };
-        LeftBtns.SizeChanged += (_, _) => LayoutTitle();
-        RightBtns.SizeChanged += (_, _) => LayoutTitle();
+        Ui.SizeChanged += (_, _) => { if (_aspect == "fill") ApplyAspect(); };
         VolPop.MouseLeave += (_, _) => _volLeft = DateTime.Now;
         VolBtn.MouseLeave += (_, _) => _volLeft = DateTime.Now;
     }
@@ -175,9 +173,13 @@ public partial class PlayerView : UserControl
         LiveCat.Text = live ? _req.Item.Category : "";
         AtualizarGuia();
 
-        TitleText.Inlines.Clear();
-        TitleText.Inlines.Add(new Run(_req.Title) { FontWeight = FontWeights.Bold });
-        if (series) TitleText.Inlines.Add(new Run($"   {_req.Episode.Label}  {_req.Episode.Title}") { Foreground = new SolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD0)) });
+        // em cima, à esquerda: capa, nome e (série) "T1 • E2  Título do episódio"; ao vivo, a categoria do canal
+        TitleText.Text = _req.Title;
+        EpText.Text = series ? $"T{_req.Episode.Season} • E{_req.Episode.Number}   {_req.Episode.Title}".TrimEnd()
+                    : live ? _req.Item.Category : _req.Item.Meta;
+        EpText.Visibility = string.IsNullOrEmpty(EpText.Text) ? Visibility.Collapsed : Visibility.Visible;
+        Img.SetSrc(PosterThumb, _req.Item.Logo);
+        PosterThumb.Visibility = string.IsNullOrEmpty(_req.Item.Logo) ? Visibility.Collapsed : Visibility.Visible;
 
         PausedTitle.Text = _req.Title;
         PausedSub.Text = series ? $"{_req.Episode.Label}  \"{_req.Episode.Title}\"" : "";
@@ -187,13 +189,6 @@ public partial class PlayerView : UserControl
         Remaining.Text = "";
         UpdatePlayIcon();
         UpdateVolIcon();
-        LayoutTitle();
-    }
-
-    void LayoutTitle()
-    {
-        double side = Math.Max(LeftBtns.ActualWidth, RightBtns.ActualWidth);
-        TitleText.MaxWidth = Math.Max(80, Bottom.ActualWidth - 2 * side - 40);
     }
 
     // ---------- Eventos do VLC ----------

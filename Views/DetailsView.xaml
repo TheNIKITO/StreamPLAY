@@ -8,52 +8,45 @@
       <Grid>
         <Border Background="Transparent" MouseLeftButtonDown="Dim_MouseDown"/>
         <Border x:Name="CardBox" Width="900" Margin="0,34,0,60" HorizontalAlignment="Center" VerticalAlignment="Top"
-                Background="#181818" CornerRadius="8">
-          <Border.Effect><DropShadowEffect BlurRadius="50" ShadowDepth="10" Opacity="0.8"/></Border.Effect>
+                Background="#141419" CornerRadius="12" BorderBrush="#26FFFFFF" BorderThickness="1">
           <StackPanel>
             <!-- Topo com imagem -->
             <Grid Height="480" ClipToBounds="True">
-              <Border x:Name="Backdrop" CornerRadius="8,8,0,0" local:Img.Decode="1200"/>
+              <Border x:Name="Backdrop" CornerRadius="12,12,0,0" local:Img.Decode="1200"/>
               <Grid x:Name="PosterArt" Visibility="Collapsed">
-                <Border x:Name="Blur" CornerRadius="8,8,0,0" local:Img.Decode="200" RenderTransformOrigin="0.5,0.5" Opacity="0.7">
-                  <Border.RenderTransform><ScaleTransform ScaleX="1.3" ScaleY="1.3"/></Border.RenderTransform>
-                  <Border.Effect><BlurEffect Radius="60" RenderingBias="Performance"/></Border.Effect>
-                </Border>
-                <Border x:Name="Poster" HorizontalAlignment="Right" Margin="0,40,48,70" Width="250" CornerRadius="6" local:Img.Decode="420">
-                  <Border.Effect><DropShadowEffect BlurRadius="30" ShadowDepth="6" Opacity="0.7"/></Border.Effect>
-                </Border>
+                <!-- capa em tamanho mínimo esticada = fundo desfocado sem BlurEffect (leve em PC fraco) -->
+                <Border x:Name="Blur" CornerRadius="12,12,0,0" local:Img.Decode="24" RenderOptions.BitmapScalingMode="Linear" Opacity="0.7"/>
+                <Border x:Name="Poster" HorizontalAlignment="Right" Margin="0,40,48,70" Width="250" CornerRadius="8" BorderBrush="#33FFFFFF" BorderThickness="1" local:Img.Decode="420"/>
               </Grid>
-              <Border CornerRadius="8,8,0,0" IsHitTestVisible="False">
+              <Border CornerRadius="12,12,0,0" IsHitTestVisible="False">
                 <Border.Background>
                   <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                    <GradientStop Color="#00181818" Offset="0.35"/>
-                    <GradientStop Color="#D9181818" Offset="0.82"/>
-                    <GradientStop Color="#FF181818" Offset="1"/>
+                    <GradientStop Color="#00141419" Offset="0.35"/>
+                    <GradientStop Color="#D9141419" Offset="0.82"/>
+                    <GradientStop Color="#FF141419" Offset="1"/>
                   </LinearGradientBrush>
                 </Border.Background>
               </Border>
               <Border IsHitTestVisible="False">
                 <Border.Background>
                   <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                    <GradientStop Color="#B3181818" Offset="0"/>
-                    <GradientStop Color="#00181818" Offset="0.6"/>
+                    <GradientStop Color="#B3141419" Offset="0"/>
+                    <GradientStop Color="#00141419" Offset="0.6"/>
                   </LinearGradientBrush>
                 </Border.Background>
               </Border>
 
               <Button Style="{StaticResource Round}" Width="44" Height="44" HorizontalAlignment="Right" VerticalAlignment="Top"
-                      Margin="16" Click="Close_Click" Background="#181818" AutomationProperties.Name="Fechar">
+                      Margin="16" Click="Close_Click" Background="#141419" AutomationProperties.Name="Fechar">
                 <Path Style="{StaticResource IcoS}" Data="{StaticResource G.Close}" StrokeThickness="2.6"/>
               </Button>
 
               <StackPanel VerticalAlignment="Bottom" Margin="48,0,48,36" HorizontalAlignment="Left" MaxWidth="560">
                 <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                  <TextBlock Text="S" FontFamily="{StaticResource LogoFont}" FontSize="26" Foreground="#E50914" VerticalAlignment="Center"/>
-                  <TextBlock x:Name="KindText" FontSize="13" FontWeight="SemiBold" Foreground="#DDDDDD" VerticalAlignment="Center" Margin="8,3,0,0"/>
+                  <Border Width="4" Height="18" CornerRadius="2" Background="#E50914" VerticalAlignment="Center"/>
+                  <TextBlock x:Name="KindText" FontSize="14" FontWeight="SemiBold" Foreground="#E8E8EE" VerticalAlignment="Center" Margin="10,0,0,0"/>
                 </StackPanel>
-                <TextBlock x:Name="TitleText" FontSize="44" FontWeight="Bold" TextWrapping="Wrap" LineHeight="52">
-                  <TextBlock.Effect><DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.6"/></TextBlock.Effect>
-                </TextBlock>
+                <TextBlock x:Name="TitleText" FontSize="44" FontWeight="Bold" TextWrapping="Wrap" LineHeight="52"/>
                 <StackPanel Orientation="Horizontal" Margin="0,22,0,0">
                   <Button x:Name="PlayBtn" Style="{StaticResource Primary}" Click="Play_Click" AutomationProperties.Name="Assistir">
                     <StackPanel Orientation="Horizontal">

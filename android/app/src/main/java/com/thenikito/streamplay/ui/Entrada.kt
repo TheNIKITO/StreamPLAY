@@ -161,7 +161,7 @@ fun TelaLogin(aviso: String?) {
     }
 
     Cartaz {
-        Logo(Modifier.height(40.dp))
+        Logo(altura = 32.dp)
         Text("Entrar", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(top = 28.dp))
         Text("Use o login e a senha que você recebeu.", fontSize = 15.sp, color = Cor.Sub, modifier = Modifier.padding(top = 6.dp, bottom = 20.dp))
         Campo(login, { login = it }, "Login", Modifier.focusRequester(campoLogin), aoConfirmar = {
@@ -208,7 +208,7 @@ fun TelaBloqueio(r: Conta.Resultado) {
     }
 
     Cartaz(480) {
-        Logo(Modifier.height(40.dp))
+        Logo(altura = 32.dp)
         Text(r.titulo, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(top = 28.dp))
         Text(r.mensagem, fontSize = 16.sp, color = Cor.Sub, lineHeight = 23.sp, modifier = Modifier.padding(top = 10.dp))
         if (porPagamento && !pix.isNullOrBlank()) {
@@ -275,7 +275,7 @@ fun TelaFonte(t: Tela.Fonte) {
             IconeBotao(Icons.AutoMirrored.Filled.ArrowBack, "Voltar", { Estado.sairDaFonte() })
             Text("Voltar", color = Cor.Sub, fontSize = 15.sp, modifier = Modifier.padding(start = 6.dp))
         }
-        Logo(Modifier.height(40.dp))
+        Logo(altura = 32.dp)
         Text("Escolha sua lista", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(top = 24.dp))
         Text(
             "Cole o link da sua lista M3U (ou escolha um arquivo do aparelho). O StreamPLAY separa sozinho Canais, Filmes e Séries.",

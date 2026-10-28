@@ -16,6 +16,7 @@ public class RowVM
     public bool CanShowAll => Total > 6;
     public IList<Item> All { get; init; }
     public bool Dynamic { get; init; }
+    public bool Continue { get; init; }   // "Continuar assistindo": cartão com nome, episódio e progresso embaixo
 }
 
 public class GridRowVM
@@ -31,8 +32,18 @@ public class HeroVM : INotifyPropertyChanged
 {
     Item _item;
     double _height = 640;
-    public Item Item { get => _item; set { _item = value; On(nameof(Item)); On(nameof(NoBackdrop)); On(nameof(PlayText)); } }
+    public Item Item { get => _item; set { _item = value; On(nameof(Item)); On(nameof(NoBackdrop)); On(nameof(PlayText)); On(nameof(TitleA)); On(nameof(TitleB)); On(nameof(KindText)); } }
     public bool NoBackdrop => _item != null && !_item.HasBackdrop;
+    // título com a última palavra em vermelho ("This Is Going to" + "Hurt"); com uma palavra só, fica todo branco
+    public string TitleA => Split().a;
+    public string TitleB => Split().b;
+    (string a, string b) Split()
+    {
+        var n = _item?.Name?.Trim() ?? "";
+        int i = n.LastIndexOf(' ');
+        return i <= 0 ? (n, "") : (n[..(i + 1)], n[(i + 1)..]);
+    }
+    public string KindText => _item?.Kind == Kind.Series ? "S É R I E" : "F I L M E";   // espaçado (o WPF não tem espaçamento entre letras)
     public double Height { get => _height; set { _height = value; On(nameof(Height)); } }
     public string PlayText
     {
@@ -49,11 +60,13 @@ public class HeroVM : INotifyPropertyChanged
     public event PropertyChangedEventHandler PropertyChanged;
 }
 
-/// <summary>Página de Filmes, Séries ou Minha lista (kind = null).</summary>
+/// <summary>Página de Filmes, Séries, Início (home: filmes e séries juntos) ou Minha lista (kind = null).</summary>
 public partial class BrowseView : UserControl, IPage
 {
     readonly Library _lib;
     readonly Kind? _kind;
+    readonly bool _home;
+    bool TemFeed => _kind != null || _home;
     readonly ObservableCollection<object> _feed = new();
     HeroVM _hero;
     List<Item> _heroPool = new();
@@ -68,13 +81,14 @@ public partial class BrowseView : UserControl, IPage
     bool _searching;
     int _cols;
 
-    public BrowseView(Library lib, Kind? kind)
+    public BrowseView(Library lib, Kind? kind, bool home = false)
     {
         InitializeComponent();
         _lib = lib;
         _kind = kind;
+        _home = home;
         Feed.ItemsSource = _feed;
-        PageTitle.Text = kind == Kind.Movie ? "Filmes" : kind == Kind.Series ? "Séries" : "Minha lista";
+        PageTitle.Text = Titulo;
         AddHandler(ButtonBase.ClickEvent, new RoutedEventHandler(OnClick));
         CatList.AddHandler(ButtonBase.ClickEvent, new RoutedEventHandler(OnClick));
         _heroTimer.Tick += (_, _) => NextHero();
@@ -84,15 +98,18 @@ public partial class BrowseView : UserControl, IPage
         {
             _sv ??= UI.Find<ScrollViewer>(Feed);
             if (_sv != null) { _sv.ScrollChanged -= OnScroll; _sv.ScrollChanged += OnScroll; }
-            if (_gridItems == null && _kind != null) _heroTimer.Start();
+            if (_gridItems == null && TemFeed) _heroTimer.Start();
         };
         Unloaded += (_, _) => _heroTimer.Stop();
 
-        if (kind == null) ShowGrid("Minha lista", Favorites(), isRoot: true);
+        if (!TemFeed) ShowGrid("Minha lista", Favorites(), isRoot: true);
         else BuildFeed();
     }
 
-    double HeroHeight() => Math.Clamp(Math.Min(ActualWidth * 0.5, ActualHeight * 0.86), 480, 820);
+    string Titulo => _home ? "" : _kind == Kind.Movie ? "Filmes" : _kind == Kind.Series ? "Séries" : "Minha lista";
+
+    // o banner deixa a primeira fileira (Continuar assistindo) aparecer sem rolar
+    double HeroHeight() => Math.Clamp(Math.Min(ActualWidth * 0.42, ActualHeight * 0.72), 440, 760);
 
     // ---------- Feed (hero + fileiras) ----------
 
@@ -102,6 +119,7 @@ public partial class BrowseView : UserControl, IPage
         _searching = false;
         BackBtn.Visibility = Visibility.Collapsed;
         PageCount.Text = "";
+        if (_home) { BuildHome(); return; }
         var kind = _kind.Value;
         var cats = _lib.Cats(kind).Where(c => c.Items.Count > 0).ToList();
         CatBtn.Visibility = cats.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
@@ -143,15 +161,64 @@ public partial class BrowseView : UserControl, IPage
         if (IsLoaded) _heroTimer.Start();
     }
 
+    // Início: lançamentos de filmes e séries no banner, depois continuar assistindo, minha lista,
+    // lançamentos e as primeiras categorias de filmes e de séries alternadas
+    void BuildHome()
+    {
+        CatBtn.Visibility = Visibility.Collapsed;
+        PageTitle.Text = "";
+        var filmes = _lib.Cats(Kind.Movie).Where(c => c.Items.Count > 0).ToList();
+        var series = _lib.Cats(Kind.Series).Where(c => c.Items.Count > 0).ToList();
+        _feed.Clear();
+        if (filmes.Count == 0 && series.Count == 0)
+        {
+            _feed.Add(new SpacerVM { Height = 150 });
+            _feed.Add(new MessageVM
+            {
+                Title = "Nenhum filme ou série na sua lista ainda",
+                Text = "Os filmes e séries do seu arquivo .m3u aparecem aqui. Os canais ficam na aba Canais.",
+            });
+            _heroTimer.Stop();
+            return;
+        }
+
+        var release = filmes.Concat(series).Where(c => c.IsRelease).SelectMany(c => c.Items).Distinct().ToList();
+        var todos = release.Count > 0 ? release : _lib.AllMovies.Concat(_lib.AllSeries).ToList();
+        _heroPool = todos.Where(i => !string.IsNullOrEmpty(i.Logo) || i.HasBackdrop).Take(15).ToList();
+        if (_heroPool.Count == 0) _heroPool = todos.Take(15).ToList();
+        _heroIndex = Random.Shared.Next(_heroPool.Count);
+        _hero = new HeroVM { Item = _heroPool[_heroIndex], Height = ActualHeight > 0 ? HeroHeight() : 640 };
+        _feed.Add(_hero);
+
+        foreach (var row in DynamicRows()) _feed.Add(row);
+        RowVM Linha(Category c, Kind k) => new()
+        {
+            Title = (k == Kind.Movie ? "Filmes" : "Séries") + (c.IsRelease ? " em lançamento" : " • " + c.Name),
+            Kind = k, Total = c.Items.Count, All = c.Items,
+            Cards = c.Items.Take(40).Select(i => MakeCard(i, inRelease: c.IsRelease)).ToList(),
+        };
+        foreach (var c in filmes.Where(c => c.IsRelease)) _feed.Add(Linha(c, Kind.Movie));
+        foreach (var c in series.Where(c => c.IsRelease)) _feed.Add(Linha(c, Kind.Series));
+        // o resto fica nas abas Filmes e Séries: aqui só as primeiras categorias, para a página não ficar enorme
+        var f = filmes.Where(c => !c.IsRelease).Take(6).ToList();
+        var s = series.Where(c => !c.IsRelease).Take(6).ToList();
+        for (int i = 0; i < Math.Max(f.Count, s.Count); i++)
+        {
+            if (i < f.Count) _feed.Add(Linha(f[i], Kind.Movie));
+            if (i < s.Count) _feed.Add(Linha(s[i], Kind.Series));
+        }
+        if (IsLoaded) _heroTimer.Start();
+    }
+
     IEnumerable<RowVM> DynamicRows()
     {
-        var kind = _kind.Value;
+        Kind? kind = _home ? null : _kind;
         var cont = Resume.ContinueCards(_lib, kind);
         if (cont.Count > 0)
-            yield return new RowVM { Title = "Continuar assistindo", Kind = kind, Cards = cont, Total = cont.Count, Dynamic = true };
-        var favs = Favorites().Where(i => i.Kind == kind).ToList();
+            yield return new RowVM { Title = "Continuar assistindo", Kind = kind ?? Kind.Movie, Cards = cont, Total = cont.Count, Dynamic = true, Continue = true };
+        var favs = Favorites().Where(i => kind == null || i.Kind == kind).ToList();
         if (favs.Count > 0)
-            yield return new RowVM { Title = "Minha lista", Kind = kind, Cards = favs.Take(40).Select(i => MakeCard(i)).ToList(), Total = favs.Count, All = favs, Dynamic = true };
+            yield return new RowVM { Title = "Minha lista", Kind = kind ?? Kind.Movie, Cards = favs.Take(40).Select(i => MakeCard(i)).ToList(), Total = favs.Count, All = favs, Dynamic = true };
     }
 
     Card MakeCard(Item i, bool inRelease = false) => new(i)
@@ -165,7 +232,7 @@ public partial class BrowseView : UserControl, IPage
 
     public void Refresh()
     {
-        if (_kind == null) { ShowGrid("Minha lista", Favorites(), isRoot: true, keepScroll: true); return; }
+        if (!TemFeed) { ShowGrid("Minha lista", Favorites(), isRoot: true, keepScroll: true); return; }
         if (_gridItems != null) { ShowGrid(_gridTitle, _gridItems, keepScroll: true); return; }
         if (_hero == null) { BuildFeed(); return; }
         // troca só as fileiras dinâmicas (continuar assistindo / minha lista)
@@ -222,8 +289,8 @@ public partial class BrowseView : UserControl, IPage
 
     void ExitGrid()
     {
-        if (_kind == null) return;
-        PageTitle.Text = _kind == Kind.Movie ? "Filmes" : "Séries";
+        if (!TemFeed) return;
+        PageTitle.Text = Titulo;
         BuildFeed();
         Smooth.Reset(_sv);
     }
@@ -231,7 +298,7 @@ public partial class BrowseView : UserControl, IPage
     void OnResized()
     {
         if (_gridItems == null || Cols() == _cols) return;
-        ShowGrid(_gridTitle, _gridItems, isRoot: _kind == null, keepScroll: true);
+        ShowGrid(_gridTitle, _gridItems, isRoot: !TemFeed, keepScroll: true);
     }
 
     public void Search(string text)
@@ -240,7 +307,7 @@ public partial class BrowseView : UserControl, IPage
         {
             if (!_searching) return;
             _searching = false;
-            if (_kind == null) ShowGrid("Minha lista", Favorites(), isRoot: true); else ExitGrid();
+            if (!TemFeed) ShowGrid("Minha lista", Favorites(), isRoot: true); else ExitGrid();
             return;
         }
         _searching = true;
@@ -278,7 +345,7 @@ public partial class BrowseView : UserControl, IPage
                 ShowGrid(cat.Name, cat.Items);
                 break;
             case "back":
-                if (_searching) MainWindow.I.Navigate(_kind == Kind.Series ? "series" : _kind == Kind.Movie ? "movies" : "mylist");
+                if (_searching) MainWindow.I.Navigate(_home ? "home" : _kind == Kind.Series ? "series" : _kind == Kind.Movie ? "movies" : "mylist");
                 else ExitGrid();
                 break;
             default:

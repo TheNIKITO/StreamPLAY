@@ -27,6 +27,15 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.window.Dialog
+import com.thenikito.streamplay.Conta
+import com.thenikito.streamplay.Dia
+import com.thenikito.streamplay.Store
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -128,7 +137,8 @@ fun TelaPrincipal() {
             "channels" -> key(lib) { TelaCanais(lib) }
             "series" -> key(lib, "series") { TelaNavegar(lib, Kind.Series) }
             "mylist" -> key(lib, "mylist") { TelaNavegar(lib, null) }
-            else -> key(lib, "movies") { TelaNavegar(lib, Kind.Movie) }
+            "movies" -> key(lib, "movies") { TelaNavegar(lib, Kind.Movie) }
+            else -> key(lib, "home") { TelaNavegar(lib, null, inicio = true) }
         }
         BarraTopo()
     }
@@ -144,62 +154,138 @@ fun alturaTopo(): androidx.compose.ui.unit.Dp {
 @Composable
 fun BarraTopo() {
     val m = medidas()
-    val solido = if (Estado.tab == "channels") 1f else Estado.topoSolido
     var buscando by remember { mutableStateOf(Estado.busca.isNotEmpty()) }
+    var janela by remember { mutableStateOf<String?>(null) }   // "avisos" ou "conta"
     val campo = remember { FocusRequester() }
 
+    // sempre sólida (nada de degradê por cima do banner), com a linha vermelha embaixo que some nas pontas
     Column(
         Modifier
             .fillMaxWidth()
-            .background(Brush.verticalGradient(listOf(Color(0xD9000000), Color.Transparent)))
-            .background(Cor.Fundo.copy(alpha = solido))
+            .background(Cor.Fundo)
             .then(if (m.largo) Modifier.descerParaConteudo() else Modifier)
-            .statusBarsPadding()
-            .padding(horizontal = m.margem)
-            .padding(top = if (m.tv) 18.dp else 8.dp, bottom = 6.dp),
+            .statusBarsPadding(),
     ) {
-        Row(Modifier.height(52.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (!(buscando && !m.largo)) Logo(Modifier.height(if (m.largo) 30.dp else 24.dp))
-            if (m.largo) {
-                Spacer(Modifier.width(28.dp))
-                Abas()
+        Column(Modifier.padding(horizontal = m.margem).padding(top = if (m.tv) 18.dp else 8.dp, bottom = 5.dp)) {
+            Row(Modifier.height(52.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (!(buscando && !m.largo)) Logo(altura = if (m.largo) 26.dp else 21.dp)
+                if (m.largo) {
+                    Spacer(Modifier.width(28.dp))
+                    Abas()
+                }
+                Spacer(Modifier.weight(1f))
+                if (buscando) {
+                    CampoBusca(
+                        campo,
+                        Modifier.then(if (m.largo) Modifier.width(260.dp) else Modifier.weight(100f)),
+                        fechar = { buscando = false; Estado.limparBusca() },
+                    )
+                    LaunchedEffect(Unit) { try { campo.requestFocus() } catch (_: Exception) { } }
+                } else {
+                    IconeBotao(Icons.Filled.Search, "Buscar", { buscando = true })
+                }
+                Spacer(Modifier.width(4.dp))
+                Box {
+                    IconeBotao(Icones.Sino, "Avisos", { janela = "avisos"; Estado.avisosNovos = false })
+                    if (Estado.avisosNovos) Box(
+                        Modifier.align(Alignment.TopEnd).padding(top = 8.dp, end = 9.dp).size(9.dp)
+                            .clip(CircleShape).background(Cor.Vermelho).border(1.5.dp, Cor.Fundo, CircleShape),
+                    )
+                }
+                Spacer(Modifier.width(4.dp))
+                IconeBotao(Icones.Usuario, "Minha conta", { janela = "conta" })
             }
-            Spacer(Modifier.weight(1f))
-            if (buscando) {
-                CampoBusca(
-                    campo,
-                    Modifier.then(if (m.largo) Modifier.width(260.dp) else Modifier.weight(100f)),
-                    fechar = { buscando = false; Estado.limparBusca() },
-                )
-                LaunchedEffect(Unit) { try { campo.requestFocus() } catch (_: Exception) { } }
-            } else {
-                IconeBotao(Icons.Filled.Search, "Buscar", { buscando = true })
-            }
-            Spacer(Modifier.width(6.dp))
-            IconeBotao(Icons.Filled.Settings, "Configurações", { Estado.abrirAjustes() })
+            if (!m.largo) Abas(Modifier.descerParaConteudo())
         }
-        if (!m.largo) Abas(Modifier.padding(top = 2.dp).descerParaConteudo())
+        Box(
+            Modifier.fillMaxWidth().height(1.dp).background(
+                Brush.horizontalGradient(0f to Color.Transparent, 0.25f to Color(0xA6E50914), 0.75f to Color(0xA6E50914), 1f to Color.Transparent),
+            ),
+        )
+    }
+    when (janela) {
+        "avisos" -> DialogoAvisos { janela = null }
+        "conta" -> DialogoConta { janela = null }
     }
 }
 
 @Composable
 private fun Abas(modifier: Modifier = Modifier) {
-    Row(modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        for ((t, nome) in listOf("channels" to "Canais", "movies" to "Filmes", "series" to "Séries", "mylist" to "Minha lista")) {
+    val abas = listOf(
+        Triple("home", "Início", Icones.Inicio), Triple("channels", "Canais", Icones.AoVivo), Triple("movies", "Filmes", Icones.Filme),
+        Triple("series", "Séries", Icones.Serie), Triple("mylist", "Minha lista", Icones.Marcador),
+    )
+    Row(modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+        for ((t, nome, icone) in abas) {
             var focado by remember { mutableStateOf(false) }
             val sel = Estado.tab == t
-            Text(
-                nome,
-                color = if (focado) Color.Black else if (sel) Color.White else Cor.Texto,
-                fontSize = 15.sp,
-                fontWeight = if (sel) FontWeight.Bold else FontWeight.Normal,
-                modifier = Modifier
-                    .foco(RoundedCornerShape(50), escala = 1.06f, borda = false, aoFocar = { focado = it }) { Estado.navegar(t) }
+            val cor = if (focado) Color.Black else if (sel) Cor.VermelhoClaro else Cor.Texto
+            Row(
+                Modifier
+                    .foco(RoundedCornerShape(8.dp), escala = 1.06f, borda = false, aoFocar = { focado = it }) { Estado.navegar(t) }
                     .background(if (focado) Color.White else Color.Transparent)
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-            )
+                    // a aba aberta ganha o traço vermelho embaixo
+                    .drawBehind {
+                        if (sel && !focado) drawRect(Cor.Vermelho, topLeft = Offset(0f, size.height - 3.dp.toPx()), size = Size(size.width, 3.dp.toPx()))
+                    }
+                    .padding(horizontal = 11.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(icone, null, tint = cor, modifier = Modifier.size(19.dp))
+                Spacer(Modifier.width(7.dp))
+                Text(nome, color = cor, fontSize = 15.sp, fontWeight = if (sel) FontWeight.SemiBold else FontWeight.Normal, maxLines = 1)
+            }
         }
     }
+}
+
+/** Janela do sino: avisos guardados (vencimento, atualização, lista atualizada). */
+@Composable
+private fun DialogoAvisos(fechar: () -> Unit) {
+    val fr = remember { FocusRequester() }
+    val controle = usandoControle()
+    Dialog(onDismissRequest = fechar) {
+        Column(Modifier.widthIn(max = 420.dp).clip(RoundedCornerShape(12.dp)).background(Cor.Painel).border(1.dp, Cor.Linha, RoundedCornerShape(12.dp)).padding(20.dp)) {
+            Text("Avisos", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            if (Estado.avisos.isEmpty()) Text("Nenhum aviso por enquanto.", fontSize = 15.sp, color = Cor.Sub, modifier = Modifier.padding(top = 10.dp))
+            for (a in Estado.avisos) Column(Modifier.padding(top = 12.dp)) {
+                Text(a.first, fontSize = 15.sp, color = Color(0xFFEDEDF2))
+                Text(a.second, fontSize = 12.sp, color = Cor.Dim, modifier = Modifier.padding(top = 2.dp))
+            }
+            Botao("Fechar", fechar, Modifier.padding(top = 18.dp), focusRequester = fr)
+        }
+    }
+    LaunchedEffect(Unit) { if (controle) { delay(150); try { fr.requestFocus() } catch (_: Exception) { } } }
+}
+
+/** Janela do perfil: nome, login, vencimento, Configurações e Sair da conta. */
+@Composable
+private fun DialogoConta(fechar: () -> Unit) {
+    val fr = remember { FocusRequester() }
+    val controle = usandoControle()
+    var sair by remember { mutableStateOf(false) }
+    val a = Estado.contaAtual?.acesso
+    Dialog(onDismissRequest = fechar) {
+        Column(Modifier.widthIn(max = 420.dp).clip(RoundedCornerShape(12.dp)).background(Cor.Painel).border(1.dp, Cor.Linha, RoundedCornerShape(12.dp)).padding(20.dp)) {
+            Text(a?.nome?.takeIf { it.isNotBlank() } ?: "Minha conta", fontSize = 19.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Store.login?.takeIf { it.isNotBlank() }?.let { Text("Login: $it", fontSize = 14.sp, color = Cor.Sub, modifier = Modifier.padding(top = 3.dp)) }
+            val venc = when {
+                a?.faturaVenc != null -> "Próximo vencimento: ${Dia.fmt(a.faturaVenc)}" + (a.faturaValor?.let { "  •  ${Conta.dinheiro(it)}" } ?: "")
+                a?.liberadoAte != null -> "Acesso liberado até ${Dia.fmt(a.liberadoAte)}"
+                else -> "Acesso liberado"
+            }
+            Text(venc, fontSize = 15.sp, color = Color(0xFFD8D8E0), modifier = Modifier.padding(top = 12.dp))
+            Row(Modifier.padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Botao("Configurações", { fechar(); Estado.abrirAjustes() }, focusRequester = fr)
+                Botao("Sair da conta", { sair = true })
+            }
+        }
+    }
+    if (sair) Confirmar(
+        "Sair da sua conta? Para usar o StreamPLAY de novo, será preciso digitar o login e a senha.", "Sair",
+        aoSim = { sair = false; fechar(); Estado.sairDaConta(null) }, aoNao = { sair = false },
+    )
+    LaunchedEffect(Unit) { if (controle) { delay(150); try { fr.requestFocus() } catch (_: Exception) { } } }
 }
 
 @Composable
@@ -264,14 +350,13 @@ fun Abertura() {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Logo(
                     Modifier
-                        .fillMaxWidth(0.62f)
-                        .widthIn(max = 560.dp)
                         .graphicsLayer {
                             alpha = (anim.value * 2.2f).coerceAtMost(1f)
                             val s = 0.86f + 0.14f * anim.value
                             scaleX = s
                             scaleY = s
                         },
+                    altura = if (medidas().largo) 60.dp else 36.dp,
                 )
                 Spacer(Modifier.height(28.dp))
                 Text(

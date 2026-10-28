@@ -7,10 +7,12 @@ import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.FocusRequester
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -37,7 +39,7 @@ object Estado {
     var abertura by mutableStateOf(true)
     var textoAbertura by mutableStateOf("")
     var lib by mutableStateOf<Library?>(null)
-    var tab by mutableStateOf("movies")
+    var tab by mutableStateOf("home")
     var detalhes by mutableStateOf<Item?>(null)
     var temporada by mutableIntStateOf(0)
     var ajustes by mutableStateOf(false)
@@ -45,6 +47,18 @@ object Estado {
     var busca by mutableStateOf("")
     var aviso by mutableStateOf<Aviso?>(null)
     var contaAtual by mutableStateOf<Conta.Resultado?>(null)
+
+    /** Avisos do sino (texto, quando), o mais novo primeiro; avisosNovos acende a bolinha vermelha. */
+    val avisos = mutableStateListOf<Pair<String, String>>()
+    var avisosNovos by mutableStateOf(false)
+
+    fun avisar(texto: String) {
+        if (texto.isBlank() || avisos.firstOrNull()?.first == texto) return
+        val quando = java.text.SimpleDateFormat("dd/MM 'às' HH:mm", java.util.Locale("pt", "BR")).format(java.util.Date())
+        avisos.add(0, texto to quando)
+        while (avisos.size > 15) avisos.removeAt(avisos.size - 1)
+        avisosNovos = true
+    }
     var topoSolido by mutableFloatStateOf(0f)
 
     var novaVersao by mutableStateOf<Atualizador.Versao?>(null)
@@ -71,8 +85,12 @@ object Estado {
     private var ultimaLista = 0L
     private var ultimaAtualizacao = 0L
     private var ultimoGuia = 0L
+    private var estaNaFrente = false
+    private var onlineId: String? = null   // conta que está aparecendo como online no painel
+    private var ultimoSinal = 0L
 
     private const val MIN = 60_000L
+    private const val ONLINE_CADA = 5 * MIN
     private const val CONTA_CADA = 15 * MIN
     private const val LISTA_CADA = 10 * MIN
     private const val ATUALIZA_CADA = 30 * MIN
@@ -112,8 +130,32 @@ object Estado {
         if (agora - ultimaAtualizacao > ATUALIZA_CADA) procurarAtualizacao(manual = false)
     }
 
+    /** O app foi para a frente (true) ou saiu dela (false): liga ou desliga o "online" no painel. */
+    fun naFrente(sim: Boolean) {
+        estaNaFrente = sim
+        atualizarOnline()
+    }
+
+    // Aparece como online no painel enquanto o app está na frente com a conta liberada; renova a cada 5 min.
+    private fun atualizarOnline() {
+        val id = if (estaNaFrente && contaAtual != null) Store.acessoId else null
+        if (id == onlineId) {
+            if (id != null && agora - ultimoSinal >= ONLINE_CADA) sinal(id, true)
+            return
+        }
+        onlineId?.let { sinal(it, false) }
+        onlineId = id
+        if (id != null) sinal(id, true)
+    }
+
+    private fun sinal(id: String, online: Boolean) {
+        if (online) ultimoSinal = agora
+        scope.launch(Dispatchers.IO) { Conta.sinal(id, online) }
+    }
+
     suspend fun periodico() {
         if (!iniciado) return
+        atualizarOnline()
         if (agora - ultimaConta >= CONTA_CADA) conferirConta()
         if (agora - ultimaLista >= LISTA_CADA) conferirLista()
         if (agora - ultimoGuia >= GUIA_CADA) carregarGuia()
@@ -133,7 +175,7 @@ object Estado {
             Store.listaSalva = fonte
             Store.save()
             definirLista(nova)
-            if (quiet) toast("Lista atualizada  •  " + nova.summary)
+            if (quiet) { toast("Lista atualizada  •  " + nova.summary); avisar("Lista atualizada  •  " + nova.summary) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
@@ -184,6 +226,7 @@ object Estado {
         if (detalhes != null || busca.isNotEmpty() || player != null) { pendente = nova; return }
         definirLista(nova)
         toast("Lista atualizada  •  " + nova.summary)
+        avisar("Lista atualizada  •  " + nova.summary)
     }
 
     /** Guia de programação dos canais (em segundo plano). */
@@ -261,10 +304,11 @@ object Estado {
         r.acesso?.login?.takeIf { it.isNotEmpty() }?.let { Store.login = it }
         Store.save()
         ultimaConta = agora
+        atualizarOnline()
     }
 
     private fun avisarVencimento(r: Conta.Resultado) {
-        Conta.aviso(r)?.let { toast(it) }
+        Conta.aviso(r)?.let { toast(it); avisar(it) }
     }
 
     private fun mostrarConta(r: Conta.Resultado) {
@@ -277,6 +321,7 @@ object Estado {
 
     private fun mostrarLogin(t: Tela) {
         contaAtual = null
+        atualizarOnline()
         busca = ""
         detalhes = null
         ajustes = false
@@ -398,6 +443,7 @@ object Estado {
             novaVersao = v
             statusAtualizacao = "A versão ${v.versao} está disponível."
             if (!manual && nova) bannerAtualizacao = true
+            if (nova) avisar("StreamPLAY ${v.versao} disponível: toque em Configurações para atualizar.")
         } catch (e: CancellationException) {
             throw e
         } catch (_: Throwable) {

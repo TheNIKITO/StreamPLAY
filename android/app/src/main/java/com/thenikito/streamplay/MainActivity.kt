@@ -32,10 +32,15 @@ class MainActivity : ComponentActivity() {
         // com o app na frente: confere conta, lista e atualização de tempos em tempos (como os timers do PC)
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                Estado.aoVoltar()
-                while (true) {
-                    delay(60_000)
-                    Estado.periodico()
+                Estado.naFrente(true)
+                try {
+                    Estado.aoVoltar()
+                    while (true) {
+                        delay(60_000)
+                        Estado.periodico()
+                    }
+                } finally {
+                    Estado.naFrente(false)   // saiu da frente: avisa o painel que ficou offline
                 }
             }
         }

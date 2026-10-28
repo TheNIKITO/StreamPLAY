@@ -48,15 +48,16 @@ object Resume {
         return if (i >= 0 && i + 1 < list.size) list[i + 1] else null
     }
 
-    fun continueCards(lib: Library, kind: Kind): List<Cartao> {
+    /** kind = null: filmes e séries juntos (aba Início). */
+    fun continueCards(lib: Library, kind: Kind?): List<Cartao> {
         val cards = ArrayList<Cartao>()
         val seen = HashSet<String>()
         for ((key, p) in Store.progress.entries.sortedByDescending { it.value.at }) {
-            if (kind == Kind.Movie && key.startsWith("mv:")) {
+            if (kind != Kind.Series && key.startsWith("mv:")) {
                 val it = lib.get(key)
                 if (it == null || p.finished || p.pos < 20000) continue
                 cards.add(Cartao(it, progress = p.fraction, sub = faltam(p.dur - p.pos), direct = true))
-            } else if (kind == Kind.Series && key.startsWith("ep:")) {
+            } else if (kind != Kind.Movie && key.startsWith("ep:")) {
                 val ep = lib.episode(key) ?: continue
                 if (!seen.add(ep.show.key)) continue
                 var target: Episode = ep
@@ -65,7 +66,7 @@ object Resume {
                     target = next(ep) ?: continue
                     frac = Store.watched(target.key)
                 } else if (p.pos < 20000) continue
-                cards.add(Cartao(ep.show, ep = target, progress = maxOf(frac, 0.006), sub = "${target.label}  ${target.title}"))
+                cards.add(Cartao(ep.show, ep = target, progress = maxOf(frac, 0.006), sub = "T${target.season} • E${target.number}"))
             }
             if (cards.size >= 20) break
         }

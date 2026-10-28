@@ -7,9 +7,8 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto" local:Smooth.On="True">
       <Grid>
         <Border Background="Transparent" MouseLeftButtonDown="Dim_MouseDown"/>
-        <Border Width="660" Margin="0,50,0,50" Padding="40,32,40,36" Background="#181818" CornerRadius="8"
+        <Border Width="660" Margin="0,50,0,50" Padding="40,32,40,36" Background="#141419" CornerRadius="12" BorderBrush="#26FFFFFF" BorderThickness="1"
                 HorizontalAlignment="Center" VerticalAlignment="Top">
-          <Border.Effect><DropShadowEffect BlurRadius="50" ShadowDepth="10" Opacity="0.8"/></Border.Effect>
           <StackPanel>
             <DockPanel>
               <Button DockPanel.Dock="Right" Style="{StaticResource Round}" Width="36" Height="36" Click="Close_Click" AutomationProperties.Name="Fechar">

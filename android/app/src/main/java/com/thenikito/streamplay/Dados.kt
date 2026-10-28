@@ -20,7 +20,7 @@ object Store {
     var source: String? = null
     var autoNext = true
     var caching = 1500
-    var tab = "movies"
+    var tab = "home"
     val favorites = ArrayList<String>()
     val progress = HashMap<String, Progresso>()
     val recent = ArrayList<String>()
@@ -51,7 +51,7 @@ object Store {
         source = j.optString("source").ifEmpty { null }
         autoNext = j.optBoolean("autoNext", true)
         caching = j.optInt("caching", 1500)
-        tab = j.optString("tab", "movies")
+        tab = j.optString("tab", "home")
         login = j.optString("login").ifEmpty { null }
         acessoId = j.optString("acessoId").ifEmpty { null }
         contaOk = j.optLong("contaOk", 0)

@@ -25,6 +25,12 @@ public static class UI
     public static void SetRadius(DependencyObject d, CornerRadius v) => d.SetValue(RadiusProperty, v);
     public static CornerRadius GetRadius(DependencyObject d) => (CornerRadius)d.GetValue(RadiusProperty);
 
+    // desenho do ícone das abas do menu (estilo Nav)
+    public static readonly DependencyProperty IconProperty =
+        DependencyProperty.RegisterAttached("Icon", typeof(Geometry), typeof(UI), new PropertyMetadata(null));
+    public static void SetIcon(DependencyObject d, Geometry v) => d.SetValue(IconProperty, v);
+    public static Geometry GetIcon(DependencyObject d) => (Geometry)d.GetValue(IconProperty);
+
     public static string Time(long ms)
     {
         if (ms < 0) ms = 0;

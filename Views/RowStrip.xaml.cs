@@ -18,7 +18,7 @@ public partial class RowStrip : UserControl
     double _offset;
     List<Card> _todos = new();
     readonly ObservableCollection<Card> _montados = new();
-    static readonly Dictionary<Kind, DataTemplate> Modelos = new();
+    static readonly Dictionary<string, DataTemplate> Modelos = new();
 
     public RowStrip()
     {
@@ -41,13 +41,16 @@ public partial class RowStrip : UserControl
         TitleText.Text = vm.Title;
         AllBtn.Visibility = vm.CanShowAll ? Visibility.Visible : Visibility.Collapsed;
         AllText.Text = vm.Total > vm.Cards.Count ? $"Ver tudo ({vm.Total})" : "Ver tudo";
-        var kind = vm.Kind == Kind.Channel ? Kind.Channel : Kind.Movie;
-        if (!Modelos.TryGetValue(kind, out var modelo))
+        var nome = vm.Kind == Kind.Channel ? "ChannelCard" : vm.Continue ? "ContinueCard" : "PosterCard";
+        if (!Modelos.TryGetValue(nome, out var modelo))
         {
-            var tpl = (DataTemplate)FindResource(kind == Kind.Channel ? "ChannelCard" : "PosterCard");
-            modelo = Modelos[kind] = new DataTemplate { VisualTree = Wrap(tpl, kind == Kind.Channel ? 230 : 168) };
+            modelo = Modelos[nome] = new DataTemplate { VisualTree = Wrap((DataTemplate)FindResource(nome), vm.Kind == Kind.Channel ? 230 : 168) };
             modelo.Seal();
         }
+        // setas no meio da imagem dos cartazes
+        double meio = 14 + (vm.Kind == Kind.Channel ? 230 * 0.68 : 168 * 1.5) / 2 - 22;
+        LeftBtn.Margin = new Thickness(12, meio, 0, 0);
+        RightBtn.Margin = new Thickness(0, meio, 12, 0);
         if (Strip.ItemTemplate != modelo) Strip.ItemTemplate = modelo;
         _todos = vm.Cards ?? new List<Card>();
         _montados.Clear();
@@ -117,6 +120,5 @@ public partial class RowStrip : UserControl
     {
         UI.Fade(LeftBtn, on ? 1 : 0, 160);
         UI.Fade(RightBtn, on ? 1 : 0, 160);
-        UI.Fade(AllBtn, on ? 1 : 0, 160);
     }
 }
