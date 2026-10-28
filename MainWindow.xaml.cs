@@ -73,7 +73,15 @@ public partial class MainWindow : Window
             TesteRolagem.Talvez(this);
         };
         _contaTimer.Tick += async (_, _) => await ConferirConta();
-        _onlineTimer.Tick += (_, _) => _ = Conta.SinalAsync(_onlineId, true);
+        _onlineTimer.Tick += (_, _) =>
+        {
+            _ = Conta.SinalAsync(_onlineId, true);
+            // junto com o sinal: parado nas telas, confere o que os outros aparelhos assistiram; vendo algo, manda o
+            // progresso a cada 10 min (ao pausar e ao sair do player ele já vai na hora)
+            if (_player == null) _ = BaixarSincronia();
+            else if (DateTime.Now - _ultimoEnvio >= TimeSpan.FromMinutes(10)) EnviarSincronia();
+        };
+        Activated += (_, _) => { if (_onlineId != null && DateTime.Now - _ultimaBaixa > TimeSpan.FromMinutes(1)) _ = BaixarSincronia(); };
         // guia de programação: relê a cada 30 min (a grade anda e o arquivo é renovado a cada 6 h)
         var guiaTimer = new DispatcherTimer { Interval = TimeSpan.FromMinutes(30) };
         guiaTimer.Tick += (_, _) => { if (Lib != null) _ = Guia.CarregarAsync(Lib); };
@@ -93,7 +101,9 @@ public partial class MainWindow : Window
             _onlineId = null;
             _player?.Shutdown();
             Store.Save();
-            saiu?.Wait(TimeSpan.FromSeconds(3));
+            // e manda o progresso / Minha lista para a nuvem (depois do player gravar onde parou)
+            var sync = id != null && Sincronia.Sujo ? Task.Run(() => Sincronia.EnviarAsync(id)) : null;
+            Task.WhenAll(new[] { saiu, sync }.Where(t => t != null)).Wait(TimeSpan.FromSeconds(3));
             // atualização baixada e não instalada: instala ao fechar (abre já na versão nova da próxima vez)
             if (!_restarting && Updater.Ready != null && Updater.CanInstall()) Updater.Install(restart: false);
         };
@@ -266,6 +276,44 @@ public partial class MainWindow : Window
         _onlineId = id;
         _onlineTimer.Start();
         _ = Conta.SinalAsync(id, true);
+        _ = EnviarOuBaixar();
+    }
+
+    // ---------- Sincronização (continuar assistindo e Minha lista entre os aparelhos da conta) ----------
+
+    DateTime _ultimaBaixa, _ultimoEnvio;
+
+    async Task EnviarOuBaixar()
+    {
+        if (Sincronia.Sujo) await EnviarSincroniaAsync(); else await BaixarSincronia();
+    }
+
+    async Task BaixarSincronia()
+    {
+        var id = _onlineId;
+        if (id == null) return;
+        _ultimaBaixa = DateTime.Now;
+        if (await Sincronia.BaixarAsync(id)) AtualizarTelas();
+        if (Sincronia.Sujo) await EnviarSincroniaAsync();   // aqui tinha coisa que a nuvem não tinha
+    }
+
+    /// <summary>Manda o progresso e a Minha lista para a nuvem (se mudou algo). Chamado ao pausar, ao sair do player, ao favoritar.</summary>
+    public void EnviarSincronia() => _ = EnviarSincroniaAsync();
+
+    async Task EnviarSincroniaAsync()
+    {
+        var id = _onlineId;
+        if (id == null || !Sincronia.Sujo) return;
+        _ultimoEnvio = DateTime.Now;
+        if (await Sincronia.EnviarAsync(id)) AtualizarTelas();
+    }
+
+    // chegou algo de outro aparelho: atualiza "Continuar assistindo" e Minha lista (no player, só ao sair dele)
+    void AtualizarTelas()
+    {
+        if (_player != null) return;
+        (PageHost.Content as IPage)?.Refresh();
+        foreach (var d in OverlayHost.Children.OfType<DetailsView>()) d.Refresh();
     }
 
     void Offline()
@@ -479,7 +527,7 @@ public partial class MainWindow : Window
         PlayerHost.Visibility = Visibility.Visible;
         TopBar.Visibility = Visibility.Collapsed;
         WinBtns.Visibility = Visibility.Collapsed;
-        if (Store.D.Fullscreen) SetFullscreen(true);
+        if (Store.D.TelaCheiaAoAbrir) SetFullscreen(true);
     }
 
     /// <summary>Chamado assim que o usuário sai do player (o VLC ainda pode estar parando).</summary>
@@ -492,6 +540,7 @@ public partial class MainWindow : Window
         WinBtns.Visibility = Visibility.Visible;
         (PageHost.Content as IPage)?.Refresh();
         foreach (var d in OverlayHost.Children.OfType<DetailsView>()) d.Refresh();
+        EnviarSincronia();   // saiu do player: o outro aparelho já pode continuar daqui
         Activate();
         Focus();
     }
@@ -503,6 +552,7 @@ public partial class MainWindow : Window
     }
 
     public bool IsFullscreen => _fullscreen;
+    public bool TocandoVideo => _player != null;
 
     public void SetFullscreen(bool on)
     {
@@ -755,9 +805,13 @@ public partial class MainWindow : Window
 
     // ---------- Janela ----------
 
-    void Min_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
-    void Max_Click(object sender, RoutedEventArgs e) => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+    void Min_Click(object sender, RoutedEventArgs e) => Minimizar();
+    void Max_Click(object sender, RoutedEventArgs e) => AlternarMaximizar();
     void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+    // também usados pelos botões da janela dentro do player (o vídeo fica por cima dos botões da janela principal)
+    public void Minimizar() => WindowState = WindowState.Minimized;
+    public void AlternarMaximizar() => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
 
     protected override void OnSourceInitialized(EventArgs e)
     {

@@ -54,6 +54,12 @@ object Guia {
         return Pair(null, null)
     }
 
+    /** Os próximos programas depois do que está passando (painel do canal na aba Canais). */
+    fun proximos(canal: Item?, agora: Long, quantos: Int): List<Programa> {
+        val lista = canal?.tvgId?.let { grade[it.lowercase(Locale.ROOT)] } ?: return emptyList()
+        return lista.asSequence().filter { it.inicio > agora }.take(quantos).toList()
+    }
+
     /** Carrega o guia para os canais desta lista (chamar na thread da tela). Pode ser chamado de novo a qualquer hora. */
     suspend fun carregar(p: Pastas, lib: Library) {
         val minha = ++carga

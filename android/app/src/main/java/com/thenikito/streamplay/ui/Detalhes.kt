@@ -234,7 +234,9 @@ private fun LinhaEpisodio(ep: Episode, atual: Boolean, versao: Int) {
     ) {
         Text(ep.number.toString(), color = Color(0xFFD2D2D2), fontSize = 22.sp, modifier = Modifier.width(40.dp))
         Box(Modifier.width(if (m.largo) 150.dp else 112.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(4.dp))) {
-            Imagem(ep.image, ep.show.name, Modifier.fillMaxSize(), tamanhoNome = 10.sp)
+            // imagem própria do episódio (TMDB); se não abrir, fica a capa da série
+            if (ep.image != ep.show.logo && !ep.show.logo.isNullOrEmpty()) Imagem(ep.show.logo, ep.show.name, Modifier.fillMaxSize(), tamanhoNome = 10.sp)
+            Imagem(ep.image, ep.show.name, Modifier.fillMaxSize(), tamanhoNome = 10.sp, semFundo = ep.image != ep.show.logo)
             if (p != null && !p.finished && p.fraction > 0.01)
                 BarraProgresso(p.fraction.toFloat(), Modifier.align(Alignment.BottomCenter).fillMaxWidth())
         }

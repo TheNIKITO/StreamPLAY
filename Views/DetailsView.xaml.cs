@@ -144,6 +144,14 @@ public partial class DetailsView : UserControl
 
             var thumb = new Grid { Height = 90, Margin = new Thickness(0, 0, 18, 0) };
             thumb.Children.Add(new Border { Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x2A)), CornerRadius = new CornerRadius(4) });
+            // imagem própria do episódio (TMDB) por cima da capa da série: se ela não abrir, fica a capa
+            if (ep.Image != _item.Logo && !string.IsNullOrEmpty(_item.Logo))
+            {
+                var capa = new Border { CornerRadius = new CornerRadius(4) };
+                Img.SetDecode(capa, 280);
+                Img.SetSrc(capa, _item.Logo);
+                thumb.Children.Add(capa);
+            }
             var art = new Border { CornerRadius = new CornerRadius(4) };
             Img.SetDecode(art, 280);
             Img.SetSrc(art, ep.Image);
@@ -218,6 +226,7 @@ public partial class DetailsView : UserControl
     void Fav_Click(object sender, RoutedEventArgs e)
     {
         bool on = Store.ToggleFav(_item.Key);
+        MainWindow.I.EnviarSincronia();
         MainWindow.I.Toast(on ? "Adicionado à Minha lista" : "Removido da Minha lista");
         Refresh();
         (MainWindow.I.PageHost.Content as IPage)?.Refresh();

@@ -53,6 +53,13 @@ public static class Guia
         return (null, null);
     }
 
+    /// <summary>Os próximos programas depois do que está passando (para o painel do canal na aba Canais).</summary>
+    public static List<Programa> Proximos(Item canal, DateTime agora, int quantos)
+    {
+        if (canal?.TvgId == null || !_grade.TryGetValue(canal.TvgId, out var lista)) return new();
+        return lista.Where(p => p.Inicio > agora).Take(quantos).ToList();
+    }
+
     /// <summary>Carrega o guia para os canais desta lista (em segundo plano). Pode ser chamado de novo a qualquer hora.</summary>
     public static async Task CarregarAsync(Library lib)
     {

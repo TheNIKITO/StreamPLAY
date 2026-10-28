@@ -12,16 +12,27 @@ public class Progress
     public bool Finished => Dur > 0 && Pos >= Dur * 0.95;
 }
 
+public class FavMarca
+{
+    public bool On { get; set; }
+    public long At { get; set; }   // milissegundos UTC
+}
+
 public class AppData
 {
     public string Source { get; set; }
     public int Volume { get; set; } = 80;
-    public bool Fullscreen { get; set; } = true;
+    // abrir o player já em tela cheia (nome novo na 1.3.1 = começa desligado para todos; o player abre como a janela está)
+    public bool TelaCheiaAoAbrir { get; set; }
     public bool AutoNext { get; set; } = true;
     public int Caching { get; set; } = 1500;
     public string Tab { get; set; } = "movies";
     public List<string> Favorites { get; set; } = new();
     public Dictionary<string, Progress> Progress { get; set; } = new();
+    // quando cada item entrou ou saiu da Minha lista (para a sincronização saber qual mudança é a mais nova)
+    public Dictionary<string, FavMarca> FavLog { get; set; } = new();
+    // "Limpar continuar assistindo" (ms UTC): progresso mais antigo que isto não volta da nuvem
+    public long ProgressoLimpo { get; set; }
     public List<string> Recent { get; set; } = new();
     // Conta do PLAYGER: guarda só o id do acesso (hash de login + senha), nunca a senha.
     public string Login { get; set; }
@@ -49,6 +60,7 @@ public static class Store
         catch { D = new AppData(); }
         D.Favorites ??= new();
         D.Progress ??= new();
+        D.FavLog ??= new();
         D.Recent ??= new();
     }
 
@@ -81,6 +93,11 @@ public static class Store
     {
         bool on = !D.Favorites.Remove(key);
         if (on) D.Favorites.Insert(0, key);
+        D.FavLog[key] = new FavMarca { On = on, At = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() };
+        // só guarda os 100 "tirados" mais recentes (para a remoção chegar nos outros aparelhos)
+        foreach (var velho in D.FavLog.Where(kv => !kv.Value.On).OrderByDescending(kv => kv.Value.At).Skip(100).Select(kv => kv.Key).ToList())
+            D.FavLog.Remove(velho);
+        Sincronia.Sujo = true;
         Save();
         return on;
     }
@@ -97,6 +114,7 @@ public static class Store
     {
         if (dur <= 0) return;
         D.Progress[key] = new Progress { Pos = pos, Dur = dur, At = DateTime.Now, Show = show };
+        Sincronia.Sujo = true;
         if (D.Progress.Count > 600)
             foreach (var old in D.Progress.OrderBy(kv => kv.Value.At).Take(100).Select(kv => kv.Key).ToList()) D.Progress.Remove(old);
         if (save) Save();

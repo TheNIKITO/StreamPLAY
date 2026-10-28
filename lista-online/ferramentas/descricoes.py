@@ -120,7 +120,8 @@ class Tmdb:
                 time.sleep(1 + tentativa)
         return None
 
-    def buscar(self, kind, titulo, ano, poster):
+    def escolher(self, kind, titulo, ano, poster):
+        """Procura o título no TMDB e devolve o resultado que bate (ou None). Usado também pelo episodios.py."""
         rota = "/search/movie" if kind == "filme" else "/search/tv"
         params = {"query": titulo, "language": "pt-BR", "include_adult": "false"}
         resultados = []
@@ -145,6 +146,10 @@ class Tmdb:
                 escolhido = next((r for r in resultados if norm(r.get("title") or r.get("name")) == norm(titulo)), None)
             else:
                 escolhido = resultados[0]
+        return escolhido
+
+    def buscar(self, kind, titulo, ano, poster):
+        escolhido = self.escolher(kind, titulo, ano, poster)
         if escolhido is None:
             return None
         if kind == "filme":

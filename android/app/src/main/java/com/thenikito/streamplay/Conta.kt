@@ -20,8 +20,8 @@ import java.util.TimeZone
  * A data usada é a do servidor.
  */
 object Conta {
-    private const val PROJETO = "playger-svect"
-    private const val CHAVE_API = "AIzaSyDhFrw8OFoCfSqptvuW1irLmpPgjegBLSo" // chave pública do app web do Firebase (não é segredo)
+    const val PROJETO = "playger-svect"
+    const val CHAVE_API = "AIzaSyDhFrw8OFoCfSqptvuW1irLmpPgjegBLSo" // chave pública do app web do Firebase (não é segredo)
     private const val BASE = "https://firestore.googleapis.com/v1/projects/$PROJETO/databases/(default)/documents/acessos/"
 
     /** Só muda nos testes (versão de depuração aberta com o extra "playger_url": servidor falso no PC). */

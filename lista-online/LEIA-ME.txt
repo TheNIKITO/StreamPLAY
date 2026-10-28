@@ -45,6 +45,13 @@ completar-descricoes.bat: completa filmes e séries com descrição, ano, gêner
   nota e imagem de fundo pelo TMDB (pede a sua chave da API do TMDB na primeira
   vez). Não apaga o que você já escreveu. Depois rode o publicar-lista.bat.
 
+completar-episodios.bat: completa cada episódio das séries com o nome, a
+  descrição e a imagem do episódio, pelo TMDB (usa a mesma chave). O nome da
+  linha ("Série S01E02") não muda: o app usa esse nome para lembrar onde cada
+  cliente parou. Na primeira vez demora mais (busca cada temporada); depois só
+  busca o que for novo. O que não achar fica em episodios-nao-encontrados.txt.
+  Não apaga o que você já escreveu. Depois rode o publicar-lista.bat.
+
 verificar-links.bat: testa os links da lista e dos canais e abre um relatório
   (links-quebrados.html) com o que não funciona. Testa 20 links ao mesmo
   tempo. Se o relatório vier com muitos "acesso negado" ou "não respondeu" que

@@ -391,6 +391,8 @@ class PlayerControle(primeiro: PlayRequest) {
         if (mp.isPlaying) {
             mp.pause()
             pausadoEm = agora()
+            salvarProgresso()
+            Estado.enviarSincronia()   // pausou: o outro aparelho já pode continuar daqui
             tocando = false
             flash = Flash("pause")
         } else {

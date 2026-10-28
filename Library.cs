@@ -505,10 +505,13 @@ public static class M3U
                 Fill(show, info);
                 if (string.IsNullOrEmpty(show.Logo)) show.Logo = logo;
                 if (number <= 0) number = show.Episodes.Count(e => e.Season == season) + 1;
+                // ep-titulo / ep-descricao / ep-imagem: do próprio episódio (completar-episodios.bat, TMDB); sem eles, o
+                // título vem do nome ("Série S01E02 Título") e a descrição e a imagem são as da série
                 var ep = new Episode
                 {
-                    Id = Hash(url + "|" + name), Season = season, Number = number, Url = url, Logo = logo, Plot = info.Plot,
-                    Title = string.IsNullOrWhiteSpace(epTitle) ? $"Episódio {number}" : epTitle, Show = show,
+                    Id = Hash(url + "|" + name), Season = season, Number = number, Url = url,
+                    Logo = A(attrs, "ep-imagem") ?? logo, Plot = A(attrs, "ep-descricao") ?? info.Plot,
+                    Title = A(attrs, "ep-titulo") ?? (string.IsNullOrWhiteSpace(epTitle) ? $"Episódio {number}" : epTitle), Show = show,
                     Options = opts, Order = order++,
                 };
                 show.Episodes.Add(ep);

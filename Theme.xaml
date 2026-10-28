@@ -636,8 +636,18 @@
             <RowDefinition Height="Auto" MinHeight="36"/>
           </Grid.RowDefinitions>
           <TextBlock Text="{Binding Initials}" FontSize="30" FontWeight="Bold" Foreground="#4A4A4A"
-                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
-          <Image local:Img.Decode="220" local:Img.Src="{Binding Logo}" Stretch="Uniform" Margin="22,16,22,4"/>
+                     HorizontalAlignment="Center" VerticalAlignment="Center">
+            <TextBlock.Style>
+              <Style TargetType="TextBlock">
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding (local:Img.Has), ElementName=logo}" Value="True">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </TextBlock.Style>
+          </TextBlock>
+          <Image x:Name="logo" local:Img.Decode="220" local:Img.Src="{Binding Logo}" Stretch="Uniform" Margin="22,16,22,4"/>
           <Border Grid.Row="1" Background="#0D0D11" CornerRadius="0,0,6,6">
             <Grid>
               <StackPanel VerticalAlignment="Center" Margin="12,6">

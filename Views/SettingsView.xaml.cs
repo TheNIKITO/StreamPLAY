@@ -25,7 +25,7 @@ public partial class SettingsView : UserControl
         if (conta?.FaturaVenc is { } venc) sub.Add($"próximo vencimento {venc:dd/MM/yyyy} ({Conta.Dinheiro(conta.FaturaValor)})");
         var linha = string.Join("  •  ", sub);
         ContaSub.Text = linha.Length > 0 ? char.ToUpper(linha[0]) + linha[1..] : "Acesso liberado.";
-        FullBox.IsChecked = Store.D.Fullscreen;
+        FullBox.IsChecked = Store.D.TelaCheiaAoAbrir;
         NextBox.IsChecked = Store.D.AutoNext;
         Guide.Text = SetupView.GuideText;
 
@@ -70,7 +70,7 @@ public partial class SettingsView : UserControl
 
     void Opt_Click(object sender, RoutedEventArgs e)
     {
-        Store.D.Fullscreen = FullBox.IsChecked == true;
+        Store.D.TelaCheiaAoAbrir = FullBox.IsChecked == true;
         Store.D.AutoNext = NextBox.IsChecked == true;
         Store.Save();
     }
@@ -97,7 +97,11 @@ public partial class SettingsView : UserControl
     {
         if (MessageBox.Show("Apagar o progresso de tudo que você estava assistindo?", "StreamPLAY", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
         Store.D.Progress.Clear();
+        // os outros aparelhos da conta também limpam (a marca vai junto na sincronização)
+        Store.D.ProgressoLimpo = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        Sincronia.Sujo = true;
         Store.Save();
+        MainWindow.I.EnviarSincronia();
         (MainWindow.I.PageHost.Content as IPage)?.Refresh();
         MainWindow.I.Toast("\"Continuar assistindo\" foi limpo");
     }

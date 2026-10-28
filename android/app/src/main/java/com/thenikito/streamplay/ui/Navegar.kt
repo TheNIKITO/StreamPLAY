@@ -178,6 +178,7 @@ private fun cartao(i: Item, naFileiraDeLancamentos: Boolean = false) = Cartao(
 
 fun favoritar(i: Item) {
     val on = Store.toggleFav(i.key)
+    Estado.enviarSincronia()
     Estado.toast(
         if (i.kind == Kind.Channel) (if (on) "${i.name} adicionado aos favoritos" else "${i.name} removido dos favoritos")
         else if (on) "Adicionado à Minha lista" else "Removido da Minha lista",

@@ -148,7 +148,7 @@ fun TelaPrincipal() {
 @Composable
 fun alturaTopo(): androidx.compose.ui.unit.Dp {
     val m = medidas()
-    return if (m.tv) 80.dp else if (m.largo) 68.dp else 100.dp
+    return if (!m.largo) 108.dp else if (m.tv) 80.dp else 68.dp   // tela estreita: logo + abas embaixo
 }
 
 @Composable

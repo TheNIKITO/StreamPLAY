@@ -35,6 +35,27 @@ class ListaTest {
     """.trimMargin()
 
     @Test
+    fun episodioComNomeDescricaoEImagemProprios() {
+        val lib = ler(
+            """
+            |#EXTM3U
+            |#EXTINF:-1 ep-titulo="O Plantão" ep-descricao="Adam enfrenta o primeiro plantão." ep-imagem="https://image.tmdb.org/t/p/w300/a.jpg" tvg-logo="http://img/s.jpg" group-title="SERIES | Drama" descricao="A série inteira",Hospital S01E01
+            |http://v.com/h101.mp4
+            |#EXTINF:-1 tvg-logo="http://img/s.jpg" group-title="SERIES | Drama",Hospital S01E02 - Do Nome
+            |http://v.com/h102.mp4
+            """.trimMargin(),
+        )
+        val show = lib.allSeries.single()
+        val (e1, e2) = show.episodes
+        assertEquals("O Plantão", e1.title)
+        assertEquals("Adam enfrenta o primeiro plantão.", e1.plot)
+        assertEquals("https://image.tmdb.org/t/p/w300/a.jpg", e1.image)
+        assertEquals("A série inteira", show.plot)        // a descrição da série continua a da série
+        assertEquals("Do Nome", e2.title)                   // sem ep-titulo: o título que vem no nome
+        assertEquals("http://img/s.jpg", e2.image)          // sem ep-imagem: a capa da série
+    }
+
+    @Test
     fun separaFilmesSeriesECanais() {
         val lib = ler(exemplo)
         assertEquals(2, lib.allMovies.size)

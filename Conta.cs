@@ -15,15 +15,15 @@ namespace StreamPLAY;
 /// </summary>
 public static class Conta
 {
-    const string Projeto = "playger-svect";
-    const string ChaveApi = "AIzaSyDhFrw8OFoCfSqptvuW1irLmpPgjegBLSo"; // chave pública do app web do Firebase (não é segredo)
+    internal const string Projeto = "playger-svect";
+    internal const string ChaveApi = "AIzaSyDhFrw8OFoCfSqptvuW1irLmpPgjegBLSo"; // chave pública do app web do Firebase (não é segredo)
 
     // STREAMPLAY_PLAYGER_URL só existe para testes (servidor local que responde como a API REST do Firestore)
     static readonly string TestUrl = Environment.GetEnvironmentVariable("STREAMPLAY_PLAYGER_URL");
-    static readonly string Base = string.IsNullOrEmpty(TestUrl)
+    internal static readonly string Base = string.IsNullOrEmpty(TestUrl)
         ? $"https://firestore.googleapis.com/v1/projects/{Projeto}/databases/(default)/documents/acessos/"
         : TestUrl.TrimEnd('/') + "/";
-    static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(15) };
+    internal static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(15) };
     static readonly CultureInfo Br = new("pt-BR");
 
     public enum Estado { Liberado, Bloqueado, Invalido, SemConexao }

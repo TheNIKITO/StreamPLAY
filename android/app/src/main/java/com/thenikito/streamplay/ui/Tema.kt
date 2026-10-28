@@ -147,6 +147,7 @@ object Icones {
     val AoVivo = icone("aovivo", "M7.5,8.5 A6.4,6.4 0 0 0 7.5,17.5 M16.5,8.5 A6.4,6.4 0 0 1 16.5,17.5 M4.6,5.6 A10.5,10.5 0 0 0 4.6,20.4 M19.4,5.6 A10.5,10.5 0 0 1 19.4,20.4 M12,11.6 A1.4,1.4 0 1 1 11.99,11.6 Z", contorno = true)
     val Filme = icone("filme", "M3.5,4.5 H20.5 V19.5 H3.5 Z M7.5,4.5 V19.5 M16.5,4.5 V19.5 M3.5,9.5 H7.5 M3.5,14.5 H7.5 M16.5,9.5 H20.5 M16.5,14.5 H20.5", contorno = true)
     val Serie = icone("serie", "M3,7.5 H21 V20 H3 Z M8,3 L12,7.5 L16,3", contorno = true)
+    val EstrelaContorno = icone("estrela", "M12,2.5 L14.9,8.6 L21.5,9.3 L16.6,13.8 L18,20.4 L12,17 L6,20.4 L7.4,13.8 L2.5,9.3 L9.1,8.6 Z", contorno = true)
     val Marcador = icone("marcador", "M6,3.5 H18 V20.5 L12,16 L6,20.5 Z", contorno = true)
     val Sino = icone("sino", "M6,16.5 V11 A6,6 0 0 1 18,11 V16.5 L19.5,18 H4.5 Z M10,20.8 H14", contorno = true)
     val Usuario = icone("usuario", "M12,3 A9,9 0 1 1 11.99,3 Z M12,7 A3.3,3.3 0 1 1 11.99,7 Z M6.2,18.6 A6.6,6.6 0 0 1 17.8,18.6", contorno = true)

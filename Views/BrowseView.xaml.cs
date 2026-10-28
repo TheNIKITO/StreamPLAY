@@ -244,7 +244,8 @@ public partial class BrowseView : UserControl, IPage
 
     void NextHero()
     {
-        if (_hero == null || _heroPool.Count < 2 || _gridItems != null || !IsVisible) return;
+        // com o player aberto o banner fica parado (a tela de trás não precisa animar enquanto o vídeo toca)
+        if (_hero == null || _heroPool.Count < 2 || _gridItems != null || !IsVisible || MainWindow.I.TocandoVideo) return;
         if (_sv != null && _sv.VerticalOffset > _hero.Height * 0.5) return;
         if (IsMouseOverHero()) return;
         var container = Feed.ItemContainerGenerator.ContainerFromItem(_hero) as UIElement;

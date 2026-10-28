@@ -87,6 +87,12 @@
               </StackPanel>
             </StackPanel>
           </StackPanel>
+          <!-- minimizar / maximizar / fechar (fora da tela cheia): os da janela ficam escondidos atrás do vídeo -->
+          <StackPanel x:Name="WinBtns" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
+            <Button Style="{StaticResource Cap}" Content="&#xE921;" Click="WinMin_Click" Foreground="White" AutomationProperties.Name="Minimizar"/>
+            <Button x:Name="WinMaxBtn" Style="{StaticResource Cap}" Content="&#xE922;" Click="WinMax_Click" Foreground="White" AutomationProperties.Name="Maximizar"/>
+            <Button Style="{StaticResource CapClose}" Content="&#xE8BB;" Click="WinClose_Click" Foreground="White" AutomationProperties.Name="Fechar"/>
+          </StackPanel>
         </Grid>
 
         <Grid VerticalAlignment="Bottom">

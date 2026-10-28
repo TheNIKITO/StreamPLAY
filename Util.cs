@@ -143,6 +143,11 @@ public static class Img
     public static void SetDecode(DependencyObject d, int v) => d.SetValue(DecodeProperty, v);
     public static int GetDecode(DependencyObject d) => (int)d.GetValue(DecodeProperty);
 
+    // true quando a imagem já apareceu (os logos de canal escondem as iniciais que ficam no lugar enquanto ela não chega)
+    public static readonly DependencyProperty HasProperty =
+        DependencyProperty.RegisterAttached("Has", typeof(bool), typeof(Img), new PropertyMetadata(false));
+    public static bool GetHas(DependencyObject d) => (bool)d.GetValue(HasProperty);
+
     static readonly string CacheDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "StreamPLAY", "imagens");
     static readonly HttpClient Http = CreateHttp();
     static readonly SemaphoreSlim Gate = new(6);
@@ -189,6 +194,7 @@ public static class Img
 
     static void Apply(FrameworkElement el, BitmapSource bmp)
     {
+        el.SetValue(HasProperty, bmp != null);
         switch (el)
         {
             case Image i: i.Source = bmp; break;

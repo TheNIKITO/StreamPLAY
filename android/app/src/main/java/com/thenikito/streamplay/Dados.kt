@@ -12,6 +12,9 @@ class Progresso(val pos: Long, val dur: Long, val at: Long, val show: String?) {
     val finished: Boolean get() = dur > 0 && pos >= dur * 0.95
 }
 
+/** Quando um item entrou (on) ou saiu da Minha lista, em ms UTC (a sincronização usa para saber o mais novo). */
+class FavMarca(val on: Boolean, val at: Long)
+
 /** Dados do app no aparelho (favoritos, progresso, lista escolhida, conta). Igual ao dados.json do PC. */
 object Store {
     private var arquivo: File? = null
@@ -24,6 +27,9 @@ object Store {
     val favorites = ArrayList<String>()
     val progress = HashMap<String, Progresso>()
     val recent = ArrayList<String>()
+    val favLog = HashMap<String, FavMarca>()
+    /** "Limpar continuar assistindo" (ms UTC): progresso mais antigo que isto não volta da nuvem. */
+    var progressoLimpo = 0L
 
     // Conta do PLAYGER: guarda só o id do acesso (hash de login + senha), nunca a senha.
     var login: String? = null
@@ -59,6 +65,8 @@ object Store {
         listaSalva = j.optString("listaSalva").ifEmpty { null }
         lista(j.optJSONArray("favorites"), favorites)
         lista(j.optJSONArray("recent"), recent)
+        progressoLimpo = j.optLong("progressoLimpo", 0)
+        j.optJSONObject("favLog")?.let { fl -> for (k in fl.keys()) fl.optJSONObject(k)?.let { favLog[k] = FavMarca(it.optBoolean("on"), it.optLong("at")) } }
         val p = j.optJSONObject("progress")
         if (p != null) for (k in p.keys()) {
             val o = p.optJSONObject(k) ?: continue
@@ -97,6 +105,10 @@ object Store {
         put("listaSalva", listaSalva ?: "")
         put("favorites", JSONArray(favorites))
         put("recent", JSONArray(recent))
+        put("progressoLimpo", progressoLimpo)
+        val fl = JSONObject()
+        for ((k, v) in favLog) fl.put(k, JSONObject().put("on", v.on).put("at", v.at))
+        put("favLog", fl)
         val p = JSONObject()
         for ((k, v) in progress) p.put(k, JSONObject().apply {
             put("pos", v.pos)
@@ -118,6 +130,10 @@ object Store {
     fun toggleFav(key: String): Boolean {
         val on = !favorites.remove(key)
         if (on) favorites.add(0, key)
+        favLog[key] = FavMarca(on, System.currentTimeMillis())
+        // só guarda os 100 "tirados" mais recentes (para a remoção chegar nos outros aparelhos)
+        favLog.entries.filter { !it.value.on }.sortedByDescending { it.value.at }.drop(100).forEach { favLog.remove(it.key) }
+        Sincronia.sujo = true
         save()
         return on
     }
@@ -132,6 +148,7 @@ object Store {
     fun setProgress(key: String, pos: Long, dur: Long, show: String?, save: Boolean = true) {
         if (dur <= 0) return
         progress[key] = Progresso(pos, dur, System.currentTimeMillis(), show)
+        Sincronia.sujo = true
         if (progress.size > 600)
             progress.entries.sortedBy { it.value.at }.take(100).map { it.key }.forEach { progress.remove(it) }
         if (save) save()

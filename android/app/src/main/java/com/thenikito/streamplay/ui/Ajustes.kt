@@ -53,6 +53,7 @@ import androidx.compose.ui.window.Dialog
 import com.thenikito.streamplay.Atualizador
 import com.thenikito.streamplay.Conta
 import com.thenikito.streamplay.Dia
+import com.thenikito.streamplay.Sincronia
 import com.thenikito.streamplay.Estado
 import com.thenikito.streamplay.Fonte
 import com.thenikito.streamplay.Store
@@ -198,7 +199,11 @@ fun TelaAjustes() {
             {
                 confirmar = null
                 Store.progress.clear()
+                // os outros aparelhos da conta também limpam (a marca vai junto na sincronização)
+                Store.progressoLimpo = System.currentTimeMillis()
+                Sincronia.sujo = true
                 Store.save()
+                Estado.enviarSincronia()
                 Estado.toast("\"Continuar assistindo\" foi limpo")
             },
             { confirmar = null },

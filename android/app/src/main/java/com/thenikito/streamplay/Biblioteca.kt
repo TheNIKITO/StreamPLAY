@@ -321,9 +321,12 @@ object M3U {
                 if (show.logo.isNullOrEmpty()) show.logo = logo
                 var number = sp.number
                 if (number <= 0) number = show.episodes.count { it.season == sp.season } + 1
+                // ep-titulo / ep-descricao / ep-imagem: do próprio episódio (completar-episodios.bat, TMDB); sem eles, o
+                // título vem do nome ("Série S01E02 Título") e a descrição e a imagem são as da série
                 val ep = Episode(
-                    h.hash("$url|$name"), sp.season, number, sp.title?.takeIf { it.isNotBlank() }, url, logo, plot,
-                    itemOpts, show, order++,
+                    h.hash("$url|$name"), sp.season, number,
+                    a(attrs, "ep-titulo") ?: sp.title?.takeIf { it.isNotBlank() }, url, a(attrs, "ep-imagem") ?: logo,
+                    a(attrs, "ep-descricao") ?: plot, itemOpts, show, order++,
                 )
                 show.addEpisode(ep)
                 lib.episodios[ep.id] = ep

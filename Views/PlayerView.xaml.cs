@@ -69,9 +69,32 @@ public partial class PlayerView : UserControl
         Video.MediaPlayer = _mp;   // o fundo preto da área do vídeo vem da MainWindow (WM_CTLCOLORSTATIC)
         Start(_req);
         _tick.Start();
-        SpinRot.BeginAnimation(RotateTransform.AngleProperty, new DoubleAnimation(0, 360, TimeSpan.FromSeconds(0.9)) { RepeatBehavior = RepeatBehavior.Forever });
-        LiveDot.BeginAnimation(OpacityProperty, new DoubleAnimation(1, 0.25, TimeSpan.FromSeconds(0.8)) { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever });
+        if (_req.IsLive) LiveDot.BeginAnimation(OpacityProperty, new DoubleAnimation(1, 0.25, TimeSpan.FromSeconds(0.8)) { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever });
         Dispatcher.BeginInvoke(DispatcherPriority.Input, () => { Ui.Focus(); Keyboard.Focus(Ui); });
+        if (Environment.GetEnvironmentVariable("STREAMPLAY_TESTE_QUADROS") is { Length: > 0 } arq) MedirQuadros(arq);
+    }
+
+    // STREAMPLAY_TESTE_QUADROS=arquivo só existe para testes: com o vídeo tocando e os controles já escondidos,
+    // conta quantas vezes por segundo o WPF redesenha (cada redesenho repinta a camada transparente por cima do vídeo)
+    void MedirQuadros(string arq)
+    {
+        var espera = new DispatcherTimer { Interval = TimeSpan.FromSeconds(12) };
+        espera.Tick += (_, _) =>
+        {
+            espera.Stop();
+            int quadros = 0;
+            EventHandler conta = (_, _) => quadros++;
+            CompositionTarget.Rendering += conta;
+            var fim = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
+            fim.Tick += (_, _) =>
+            {
+                fim.Stop();
+                CompositionTarget.Rendering -= conta;
+                File.WriteAllText(arq, $"redesenhos por segundo com os controles escondidos: {quadros / 10.0:0.0} (controles visíveis: {_chromeShown})");
+            };
+            fim.Start();
+        };
+        espera.Start();
     }
 
     // Os controles ficam numa janela transparente separada (por cima do vídeo do VLC). Se ela virar a
@@ -264,12 +287,12 @@ public partial class PlayerView : UserControl
         if (st == VLCState.Playing && (now - _startedAt).TotalSeconds > 20) _retries = 0;
 
         bool busy = !_errorShown && (st == VLCState.Opening || st == VLCState.Buffering || st == VLCState.NothingSpecial || (st == VLCState.Playing && _cache < 100));
-        Spinner.Visibility = busy ? Visibility.Visible : Visibility.Collapsed;
+        MostrarSpinner(busy);
 
         if (!_req.IsLive)
         {
-            if (!_seeking && len > 0) SetSeekVisual(t / (double)len);
-            if (!_seeking) Remaining.Text = len > 0 ? UI.Time(len - t) : "";
+            // barra e tempo só mudam com os controles à vista: escondidos, qualquer mudança repintaria a camada à toa
+            if (_chromeShown) AtualizarTempo();
             if (len > 0 && st == VLCState.Playing && (now - _lastSave).TotalSeconds > 5) SaveProgress();
 
             if (_next != null && !_nextShown && !_creditsDismissed && len > 180000 && t > 0 && len - t < 25000) ShowNextCard();
@@ -284,7 +307,7 @@ public partial class PlayerView : UserControl
         if (ResumeToast.Visibility == Visibility.Visible && (now - _resumeShownAt).TotalSeconds > 7)
             UI.Fade(ResumeToast, 0, 400, () => { if (ResumeToast.Opacity < 0.05) ResumeToast.Visibility = Visibility.Collapsed; });
 
-        bool overControls = Bottom.IsMouseOver || BackBtn.IsMouseOver || VolPop.IsMouseOver || PanelBox.IsMouseOver || NextCard.IsMouseOver || ErrorBox.IsVisible;
+        bool overControls = Bottom.IsMouseOver || BackBtn.IsMouseOver || WinBtns.IsMouseOver || VolPop.IsMouseOver || PanelBox.IsMouseOver || NextCard.IsMouseOver || ErrorBox.IsVisible;
         if (_chromeShown && st == VLCState.Playing && _panel == null && !_seeking && !_volDrag && !overControls && (now - _lastMove).TotalSeconds > 3.2)
             HideChrome();
 
@@ -294,7 +317,10 @@ public partial class PlayerView : UserControl
         if (st == VLCState.Paused && !_pausedInfo && _panel == null && (now - _pausedAt).TotalSeconds > 6 && (now - _lastMove).TotalSeconds > 6 && !_req.IsLive)
             ShowPausedInfo();
 
-        FullIcon.Data = (Geometry)FindResource(MainWindow.I.IsFullscreen ? "G.ExitFull" : "G.Full");
+        var full = (Geometry)FindResource(MainWindow.I.IsFullscreen ? "G.ExitFull" : "G.Full");
+        if (!ReferenceEquals(FullIcon.Data, full)) FullIcon.Data = full;
+        WinBtns.Visibility = MainWindow.I.IsFullscreen ? Visibility.Collapsed : Visibility.Visible;
+        WinMaxBtn.Content = MainWindow.I.WindowState == WindowState.Maximized ? "" : "";
         NoActivate();
         MainWindow.I.SyncTopmost();
     }
@@ -429,11 +455,35 @@ public partial class PlayerView : UserControl
         if (!_chromeShown) ShowChrome();
     }
 
+    // Os controles ficam numa janela transparente por cima do vídeo: cada vez que algo nela muda, o Windows repinta
+    // a janela inteira. Em vídeo integrado antigo (ex.: Intel HD 2000/3000) essa repintura pisca preto. Por isso nada
+    // anima nem muda nela com os controles escondidos (antes eram ~230 repinturas por segundo só com o vídeo tocando).
+    void MostrarSpinner(bool on)
+    {
+        var vis = on ? Visibility.Visible : Visibility.Collapsed;
+        if (Spinner.Visibility == vis) return;
+        Spinner.Visibility = vis;
+        SpinRot.BeginAnimation(RotateTransform.AngleProperty,
+            on ? new DoubleAnimation(0, 360, TimeSpan.FromSeconds(0.9)) { RepeatBehavior = RepeatBehavior.Forever } : null);
+    }
+
+    void AtualizarTempo()
+    {
+        if (_mp == null || _seeking || _req.IsLive) return;
+        long len = _mp.Length, t = _mp.Time;
+        if (len > 0) SetSeekVisual(t / (double)len);
+        var resta = len > 0 ? UI.Time(len - t) : "";
+        if (Remaining.Text != resta) Remaining.Text = resta;
+    }
+
     void ShowChrome()
     {
         _chromeShown = true;
+        AtualizarTempo();
+        if (_req.IsLive) LiveDot.BeginAnimation(OpacityProperty, new DoubleAnimation(1, 0.25, TimeSpan.FromSeconds(0.8)) { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever });
         _lastMove = DateTime.Now;
         Chrome.IsHitTestVisible = true;
+        Chrome.Visibility = Visibility.Visible;
         UI.Fade(Chrome, 1, 150);
         Ui.Cursor = null;
     }
@@ -441,9 +491,11 @@ public partial class PlayerView : UserControl
     void HideChrome()
     {
         _chromeShown = false;
+        LiveDot.BeginAnimation(OpacityProperty, null);
         Chrome.IsHitTestVisible = false;
         VolPop.Visibility = Visibility.Collapsed;
-        UI.Fade(Chrome, 0, 450);
+        // terminado o sumiço, os controles saem de vez: a camada por cima do vídeo fica vazia
+        UI.Fade(Chrome, 0, 450, () => { if (!_chromeShown) Chrome.Visibility = Visibility.Hidden; });
         Ui.Cursor = Cursors.None;
     }
 
@@ -483,7 +535,7 @@ public partial class PlayerView : UserControl
         if (st == VLCState.Ended || st == VLCState.Stopped || st == VLCState.Error) { Start(_req); return; }
         bool pause = _mp.IsPlaying;
         _mp.SetPause(pause);
-        if (pause) _pausedAt = DateTime.Now;
+        if (pause) { _pausedAt = DateTime.Now; SaveProgress(); MainWindow.I.EnviarSincronia(); }   // pausou: o outro aparelho já pode continuar daqui
         FlashIconShow(pause ? "G.Pause" : "G.Play");
         Dispatcher.BeginInvoke(DispatcherPriority.Background, UpdatePlayIcon);
         if (!pause) HidePausedInfo();
@@ -996,6 +1048,9 @@ public partial class PlayerView : UserControl
     void ChPrev_Click(object sender, RoutedEventArgs e) => Zap(-1);
     void ChNext_Click(object sender, RoutedEventArgs e) => Zap(1);
     void Full_Click(object sender, RoutedEventArgs e) => ToggleFullscreen();
+    void WinMin_Click(object sender, RoutedEventArgs e) => MainWindow.I.Minimizar();
+    void WinMax_Click(object sender, RoutedEventArgs e) => MainWindow.I.AlternarMaximizar();
+    void WinClose_Click(object sender, RoutedEventArgs e) => MainWindow.I.Close();
     void Back_Click(object sender, RoutedEventArgs e) => Close();
 
     void Credits_Click(object sender, RoutedEventArgs e)

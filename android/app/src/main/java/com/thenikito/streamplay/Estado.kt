@@ -88,6 +88,7 @@ object Estado {
     private var estaNaFrente = false
     private var onlineId: String? = null   // conta que está aparecendo como online no painel
     private var ultimoSinal = 0L
+    private var ultimoEnvio = 0L
 
     private const val MIN = 60_000L
     private const val ONLINE_CADA = 5 * MIN
@@ -140,12 +141,36 @@ object Estado {
     private fun atualizarOnline() {
         val id = if (estaNaFrente && contaAtual != null) Store.acessoId else null
         if (id == onlineId) {
-            if (id != null && agora - ultimoSinal >= ONLINE_CADA) sinal(id, true)
+            if (id != null && agora - ultimoSinal >= ONLINE_CADA) {
+                sinal(id, true)
+                // junto com o sinal: parado nas telas, confere o que os outros aparelhos assistiram; vendo algo,
+                // manda o progresso a cada 10 min (ao pausar e ao sair do player ele já vai na hora)
+                if (player == null) baixarSincronia(id) else if (agora - ultimoEnvio >= 10 * MIN) enviarSincronia()
+            }
             return
         }
-        onlineId?.let { sinal(it, false) }
+        onlineId?.let { antigo -> sinal(antigo, false); enviarSincronia(antigo) }   // saiu da frente: manda o que mudou
         onlineId = id
-        if (id != null) sinal(id, true)
+        if (id != null) {
+            sinal(id, true)
+            if (Sincronia.sujo) enviarSincronia() else baixarSincronia(id)
+        }
+    }
+
+    // ---------- Sincronização (continuar assistindo e Minha lista entre os aparelhos da conta) ----------
+
+    private fun baixarSincronia(id: String) {
+        scope.launch {
+            if (Sincronia.baixar(id)) Store.versao.intValue++   // as telas releem progresso e favoritos
+            if (Sincronia.sujo) enviarSincronia(id)
+        }
+    }
+
+    /** Manda progresso e Minha lista para a nuvem (se mudou algo). Ao pausar, ao sair do player, ao favoritar. */
+    fun enviarSincronia(id: String? = onlineId) {
+        if (id == null || !Sincronia.sujo) return
+        ultimoEnvio = agora
+        scope.launch { if (Sincronia.enviar(id)) Store.versao.intValue++ }
     }
 
     private fun sinal(id: String, online: Boolean) {
@@ -415,6 +440,7 @@ object Estado {
     fun fecharPlayer() {
         player = null
         Store.save()
+        enviarSincronia()   // saiu do player: o outro aparelho já pode continuar daqui
         aplicarPendente()
     }
 

@@ -211,14 +211,17 @@ fun Imagem(
     tamanhoNome: TextUnit = 14.sp,
     padding: Dp = 0.dp,
     miniatura: Boolean = false,
+    semFundo: Boolean = false,   // por cima de outra imagem: se esta não abrir, não cobre a de baixo
 ) {
     var falhou by remember(url) { mutableStateOf(url.isNullOrBlank()) }
     val base = paleta[((nome ?: "").hashCode() and 0x7fffffff) % paleta.size]
     Box(
-        modifier.background(if (falhou) Brush.linearGradient(listOf(base, Color(0xFF242424))) else Brush.linearGradient(listOf(Cor.Cartao, Cor.Cartao))),
+        if (semFundo) modifier
+        else modifier.background(if (falhou) Brush.linearGradient(listOf(base, Color(0xFF242424))) else Brush.linearGradient(listOf(Cor.Cartao, Cor.Cartao))),
         contentAlignment = Alignment.Center,
     ) {
         if (falhou) {
+            if (semFundo) return@Box
             Text(
                 (nome ?: "").uppercase(), color = Color.White, fontSize = tamanhoNome, fontWeight = FontWeight.Black,
                 textAlign = TextAlign.Center, maxLines = 4, overflow = TextOverflow.Ellipsis, lineHeight = tamanhoNome * 1.1f,

@@ -7,3 +7,5 @@ __pycache__/
 links-cache.json
 links-quebrados.html
 *-sem-quebrados.m3u
+tmdb-episodios-cache.json
+episodios-nao-encontrados.txt
