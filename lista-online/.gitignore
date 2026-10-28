@@ -4,3 +4,6 @@ tmdb-chave.txt
 tmdb-cache.json
 nao-encontrados.txt
 __pycache__/
+links-cache.json
+links-quebrados.html
+*-sem-quebrados.m3u

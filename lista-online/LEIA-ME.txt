@@ -38,3 +38,18 @@ publicar-lista.bat de novo, digite o nome e responda S em "o projeto já é seu"
 Para trocar de projeto depois, apague o arquivo projeto.txt.
 
 Observação: qualquer pessoa com o link consegue baixar a lista.
+
+FERRAMENTAS
+-----------
+completar-descricoes.bat: completa filmes e séries com descrição, ano, gênero,
+  nota e imagem de fundo pelo TMDB (pede a sua chave da API do TMDB na primeira
+  vez). Não apaga o que você já escreveu. Depois rode o publicar-lista.bat.
+
+verificar-links.bat: testa os links da lista e dos canais e abre um relatório
+  (links-quebrados.html) com o que não funciona. Vai devagar de propósito (3
+  testes por vez) para o fornecedor não bloquear a sua conta; o ideal é rodar
+  de madrugada. Cada link só é dado como quebrado depois de falhar 3 vezes.
+  Sua lista NÃO muda: ele gera lista-sem-quebrados.m3u e canais-sem-quebrados.m3u
+  aqui na pasta. Se quiser usar, confira, copie por cima da que está em
+  public\ e publique. Para ir mais devagar, acrescente na linha do python
+  dentro do .bat, depois de %*:  --simultaneos 2 --pausa 1
