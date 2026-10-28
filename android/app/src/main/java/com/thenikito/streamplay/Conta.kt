@@ -45,7 +45,36 @@ object Conta {
         val limite: Int = 0,
         /** Link da lista que o painel entrega com o login (vazio = o cliente escolhe no app). */
         val lista: String? = null,
+        /** Servidor do Pix automático (vazio = desligado no painel). */
+        val pixUrl: String? = null,
     )
+
+    /** Pix automático: o QR Code (PNG em base64) e o "copia e cola" do que o cliente deve. */
+    class Pix(val pendente: Boolean, val valor: Double, val faturas: Int, val copia: String?, val qr: String?)
+
+    /** O servidor do Pix respondeu com um erro (a mensagem dele é para o cliente). */
+    class ErroPix(msg: String) : IOException(msg)
+
+    /** Pede ao servidor do Pix (Mercado Pago) o Pix do que está em aberto. Erro: IOException com a mensagem do servidor. */
+    suspend fun pix(url: String, acesso: String): Pix = withContext(Dispatchers.IO) {
+        val c = URL(url.trimEnd('/') + "/pix").openConnection() as HttpURLConnection
+        try {
+            c.connectTimeout = 15000
+            c.readTimeout = 25000
+            c.requestMethod = "POST"
+            c.doOutput = true
+            c.setRequestProperty("Content-Type", "application/json")
+            c.outputStream.use { it.write(JSONObject().put("acesso", acesso).toString().toByteArray()) }
+            val codigo = c.responseCode
+            val txt = (if (codigo in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
+            val j = try { JSONObject(txt) } catch (_: Exception) { JSONObject() }
+            fun s(n: String) = if (j.isNull(n)) null else j.optString(n).ifEmpty { null }
+            if (codigo !in 200..299) throw ErroPix(s("erro") ?: "Não foi possível gerar o Pix agora.")
+            Pix(j.optBoolean("pendente"), j.optDouble("valor", 0.0), j.optInt("faturas", 1), s("copia"), s("qr"))
+        } finally {
+            c.disconnect()
+        }
+    }
 
     /** [aparelhos]: bloqueado porque o limite de aparelhos está cheio (não é falta de pagamento). */
     class Resultado(
@@ -273,6 +302,7 @@ object Conta {
             faturaValor = fatura?.let { numero(it, "valor") },
             limite = numero(f, "limite")?.toInt() ?: 0,
             lista = texto(f, "lista"),
+            pixUrl = texto(f, "pixUrl"),
         )
     }
 

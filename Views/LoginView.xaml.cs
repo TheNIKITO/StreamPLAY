@@ -2,13 +2,17 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 
 namespace StreamPLAY;
 
 /// <summary>Tela de entrada com a conta do PLAYGER (e o aviso de acesso bloqueado).</summary>
 public partial class LoginView : UserControl
 {
-    bool _ocupado;
+    bool _ocupado, _pixPedido;
+    DispatcherTimer _espera;
+    DateTime _esperaDesde;
 
     /// <summary>Mostra o formulário de entrar (com um aviso opcional).</summary>
     public LoginView(string aviso)
@@ -35,6 +39,78 @@ public partial class LoginView : UserControl
         DeNovoText.Text = porPagamento ? "Já paguei, verificar de novo" : "Verificar de novo";
         AutomationProperties.SetName(DeNovoBtn, DeNovoText.Text);
         BloqStatus.Visibility = Visibility.Collapsed;
+        // Pix automático ligado no painel: QR Code com o valor certo no lugar da chave
+        var url = r.Acesso?.PixUrl;
+        if (porPagamento && !string.IsNullOrWhiteSpace(url) && !string.IsNullOrEmpty(Store.D.AcessoId))
+        {
+            PixBox.Visibility = Visibility.Collapsed;
+            PixAuto.Visibility = Visibility.Visible;
+            if (!_pixPedido) _ = MostrarPix(url, pix);
+        }
+        else PixAuto.Visibility = Visibility.Collapsed;
+    }
+
+    async Task MostrarPix(string url, string chave)
+    {
+        _pixPedido = true;
+        PixAutoTitulo.Text = "Gerando o Pix...";
+        try
+        {
+            var p = await Conta.PixAsync(url, Store.D.AcessoId);
+            if (!p.Pendente) { PixAuto.Visibility = Visibility.Collapsed; Esperar(); return; }   // já pago: só falta o acesso atualizar
+            PixAutoTitulo.Text = $"Pague com Pix: {Conta.Dinheiro(p.Valor)}" + (p.Faturas > 1 ? $"  ({p.Faturas} faturas)" : "");
+            if (!string.IsNullOrEmpty(p.Qr))
+            {
+                var img = new BitmapImage();
+                img.BeginInit();
+                img.CacheOption = BitmapCacheOption.OnLoad;
+                img.StreamSource = new MemoryStream(Convert.FromBase64String(p.Qr));
+                img.EndInit();
+                img.Freeze();
+                PixQr.Source = img;
+                PixQrBox.Visibility = Visibility.Visible;
+            }
+            PixCopia.Text = p.Copia ?? "";
+            PixCopiaLinha.Visibility = string.IsNullOrEmpty(p.Copia) ? Visibility.Collapsed : Visibility.Visible;
+            PixAutoDica.Visibility = Visibility.Visible;
+            Esperar();
+        }
+        catch (Exception ex)
+        {
+            // sem o Pix automático agora: volta a chave Pix de sempre
+            App.Log(ex);
+            _pixPedido = false;
+            PixAuto.Visibility = Visibility.Collapsed;
+            PixBox.Visibility = string.IsNullOrWhiteSpace(chave) ? Visibility.Collapsed : Visibility.Visible;
+            BloqStatus.Text = "Não consegui gerar o QR Code do Pix agora: " + (ex is InvalidOperationException ? ex.Message : "sem resposta do servidor.");
+            BloqStatus.Visibility = Visibility.Visible;
+        }
+    }
+
+    // Com o Pix na tela, confere sozinho se o pagamento caiu (a cada 10 s; depois de 20 min, a cada minuto)
+    void Esperar()
+    {
+        if (_espera != null) return;
+        _esperaDesde = DateTime.Now;
+        _espera = new DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
+        _espera.Tick += async (_, _) =>
+        {
+            if (!IsLoaded || BloqPanel.Visibility != Visibility.Visible) { _espera.Stop(); return; }
+            if (DateTime.Now - _esperaDesde > TimeSpan.FromMinutes(20)) _espera.Interval = TimeSpan.FromMinutes(1);
+            if (_ocupado || string.IsNullOrEmpty(Store.D.AcessoId)) return;
+            var r = await Conta.VerificarAsync(Store.D.AcessoId);
+            if (r.Estado != Conta.Estado.Liberado || !IsLoaded || BloqPanel.Visibility != Visibility.Visible || _ocupado) return;
+            _espera.Stop();
+            MainWindow.I.Toast("Pagamento confirmado! Bom proveito.");
+            MainWindow.I.ContaLiberada(r);
+        };
+        Unloaded += (_, _) => _espera.Stop();
+        _espera.Start();
+    }
+
+    void CopiarCodigo_Click(object sender, RoutedEventArgs e)
+    {
+        try { Clipboard.SetText(PixCopia.Text); MainWindow.I.Toast("Código Pix copiado. Cole no app do seu banco (Pix copia e cola)."); } catch { }
     }
 
     void Erro(string msg)

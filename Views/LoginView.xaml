@@ -89,6 +89,24 @@
               </DockPanel>
             </Border>
 
+            <!-- Pix automático: QR Code + copia e cola; o app entra sozinho quando o pagamento cai -->
+            <Border x:Name="PixAuto" Background="#1E1E1E" BorderBrush="#333333" BorderThickness="1" CornerRadius="6" Padding="18" Margin="0,20,0,0" Visibility="Collapsed">
+              <StackPanel>
+                <TextBlock x:Name="PixAutoTitulo" Text="Gerando o Pix..." FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                <Border x:Name="PixQrBox" Background="White" CornerRadius="6" Padding="10" Width="230" Height="230" HorizontalAlignment="Center" Margin="0,16,0,0" Visibility="Collapsed">
+                  <Image x:Name="PixQr" Stretch="Uniform" RenderOptions.BitmapScalingMode="NearestNeighbor" AutomationProperties.Name="QR Code do Pix"/>
+                </Border>
+                <TextBlock x:Name="PixAutoDica" FontSize="13.5" Foreground="#B3B3B3" TextWrapping="Wrap" Margin="0,16,0,0" LineHeight="20" Visibility="Collapsed"
+                           Text="No app do seu banco, escolha Pix e Pagar com QR Code e aponte a câmera, ou use o código copia e cola. O acesso é liberado sozinho assim que o pagamento for confirmado."/>
+                <DockPanel x:Name="PixCopiaLinha" Margin="0,12,0,0" Visibility="Collapsed">
+                  <Button DockPanel.Dock="Right" Style="{StaticResource GhostBtn}" Content="Copiar código" Padding="14,6" Margin="10,0,0,0"
+                          VerticalAlignment="Center" Click="CopiarCodigo_Click" AutomationProperties.Name="Copiar código Pix"/>
+                  <TextBox x:Name="PixCopia" IsReadOnly="True" FontFamily="Consolas" FontSize="12" Background="#141414" Foreground="#C8C8C8"
+                           BorderThickness="0" Padding="8,7" VerticalContentAlignment="Center" AutomationProperties.Name="Código Pix copia e cola"/>
+                </DockPanel>
+              </StackPanel>
+            </Border>
+
             <TextBlock x:Name="BloqStatus" Foreground="#E87C03" FontSize="14" TextWrapping="Wrap" Margin="0,14,0,0" Visibility="Collapsed"/>
 
             <Button x:Name="DeNovoBtn" Style="{StaticResource RedBtn}" Click="DeNovo_Click" HorizontalAlignment="Stretch" Padding="0,13" Margin="0,24,0,0">

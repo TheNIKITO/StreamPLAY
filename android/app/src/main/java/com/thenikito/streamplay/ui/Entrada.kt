@@ -1,9 +1,12 @@
 package com.thenikito.streamplay.ui
 
 import android.content.ActivityNotFoundException
+import android.graphics.BitmapFactory
+import android.util.Base64
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -17,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -43,6 +47,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
@@ -51,6 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.thenikito.streamplay.Conta
@@ -58,6 +65,7 @@ import com.thenikito.streamplay.Estado
 import com.thenikito.streamplay.M3U
 import com.thenikito.streamplay.Store
 import com.thenikito.streamplay.Tela
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -187,7 +195,39 @@ fun TelaBloqueio(r: Conta.Resultado) {
     val porPagamento = r.acesso?.ativo == true && !r.acesso.manual && !r.aparelhos
     val deNovo = remember { FocusRequester() }
     val controle = usandoControle()
+    val tv = LocalTv.current
     LaunchedEffect(Unit) { if (controle) { delay(200); try { deNovo.requestFocus() } catch (_: Exception) { } } }
+
+    // Pix automático ligado no painel: QR Code com o valor certo no lugar da chave
+    val pixUrl = r.acesso?.pixUrl
+    val auto = porPagamento && !pixUrl.isNullOrBlank()
+    var px by remember { mutableStateOf<Conta.Pix?>(null) }
+    var pixErro by remember { mutableStateOf<String?>(null) }
+    if (auto) LaunchedEffect(pixUrl) {
+        val id = Store.acessoId ?: return@LaunchedEffect
+        try {
+            px = Conta.pix(pixUrl!!, id)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            pixErro = if (e is Conta.ErroPix) e.message else "sem resposta do servidor."
+        }
+    }
+    // com o Pix na tela, confere sozinho se o pagamento caiu (a cada 10 s; depois de 20 min, a cada minuto)
+    if (auto) LaunchedEffect(Unit) {
+        val inicio = System.currentTimeMillis()
+        while (true) {
+            delay(if (System.currentTimeMillis() - inicio > 20 * 60_000L) 60_000L else 10_000L)
+            val id = Store.acessoId ?: break
+            if (ocupado) continue
+            val r2 = Conta.verificar(id)
+            if (r2.estado == Conta.Estado.Liberado && !ocupado) {
+                Estado.toast("Pagamento confirmado! Bom proveito.")
+                Estado.contaLiberada(r2)
+                break
+            }
+        }
+    }
 
     fun verificar() {
         val id = Store.acessoId
@@ -209,11 +249,64 @@ fun TelaBloqueio(r: Conta.Resultado) {
         }
     }
 
-    Cartaz(480) {
-        Logo(altura = 32.dp)
-        Text(r.titulo, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(top = 28.dp))
+    val qr = remember(px?.qr) {
+        px?.qr?.let { try { Base64.decode(it, Base64.DEFAULT).let { b -> BitmapFactory.decodeByteArray(b, 0, b.size) }?.asImageBitmap() } catch (_: Exception) { null } }
+    }
+    // na TV a tela é baixa: o QR Code fica ao lado do texto, inteiro, para a câmera do celular
+    val qrAoLado = tv && auto && pixErro == null && px?.pendente == true && qr != null
+
+    val conteudo: @Composable () -> Unit = {
+        if (!qrAoLado) Logo(altura = 32.dp)
+        Text(r.titulo, fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(top = if (qrAoLado) 0.dp else 28.dp))
         Text(r.mensagem, fontSize = 16.sp, color = Cor.Sub, lineHeight = 23.sp, modifier = Modifier.padding(top = 10.dp))
-        if (porPagamento && !pix.isNullOrBlank()) {
+        if (auto && pixErro == null) {
+            Column(
+                Modifier
+                    .padding(top = 20.dp)
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(Color(0xFF1F1F1F))
+                    .border(1.dp, Cor.Linha, RoundedCornerShape(6.dp))
+                    .padding(16.dp),
+            ) {
+                val p = px
+                when {
+                    p == null -> Text("Gerando o Pix...", color = Cor.Sub, fontSize = 16.sp)
+                    !p.pendente -> Text("Pagamento recebido. Liberando o acesso...", color = Cor.Sub, fontSize = 16.sp)
+                    else -> {
+                        Text(
+                            "Pague com Pix: ${Conta.dinheiro(p.valor)}" + if (p.faturas > 1) "  (${p.faturas} faturas)" else "",
+                            color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                        )
+                        Text(
+                            if (tv) "No celular, abra o app do seu banco, escolha Pix e Pagar com QR Code e aponte a câmera para o código ao lado."
+                            else "Copie o código e cole no app do seu banco (Pix copia e cola). Também dá para pagar o QR Code por outro celular.",
+                            color = Cor.Sub, fontSize = 14.sp, lineHeight = 20.sp, modifier = Modifier.padding(top = 8.dp),
+                        )
+                        // copiar só faz sentido no celular (na TV não há onde colar)
+                        if (!tv && p.copia != null) {
+                            Text(p.copia, color = Cor.Dim, fontSize = 12.sp, fontFamily = FontFamily.Monospace, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 12.dp))
+                            Botao("Copiar código Pix", {
+                                clip.setText(AnnotatedString(p.copia))
+                                Estado.toast("Código Pix copiado. Cole no app do seu banco (Pix copia e cola).")
+                            }, Modifier.padding(top = 8.dp), primario = true)
+                        }
+                        if (!qrAoLado && qr != null) Image(
+                            qr, "QR Code do Pix", filterQuality = FilterQuality.None,
+                            modifier = Modifier
+                                .padding(top = 14.dp)
+                                .align(Alignment.CenterHorizontally)
+                                .size(210.dp)
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(Color.White)
+                                .padding(10.dp),
+                        )
+                        Text("O acesso é liberado sozinho assim que o pagamento for confirmado.", color = Cor.Verde, fontSize = 13.sp, modifier = Modifier.padding(top = 12.dp))
+                    }
+                }
+            }
+        } else if (porPagamento && !pix.isNullOrBlank()) {
+            pixErro?.let { Text("Não consegui gerar o QR Code do Pix agora: $it", color = Cor.Sub, fontSize = 14.sp, modifier = Modifier.padding(top = 14.dp)) }
             Column(
                 Modifier
                     .padding(top = 20.dp)
@@ -238,6 +331,16 @@ fun TelaBloqueio(r: Conta.Resultado) {
         status?.let { Text(it, color = Cor.Sub, fontSize = 14.sp, modifier = Modifier.padding(top = 12.dp)) }
         Botao("Entrar com outra conta", { Estado.sairDaConta(null) }, Modifier.fillMaxWidth().padding(top = 12.dp))
     }
+
+    if (qrAoLado) Cartaz(960) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(40.dp)) {
+            Column(Modifier.weight(1f)) { conteudo() }
+            Image(
+                qr!!, "QR Code do Pix", filterQuality = FilterQuality.None,
+                modifier = Modifier.size(320.dp).clip(RoundedCornerShape(8.dp)).background(Color.White).padding(14.dp),
+            )
+        }
+    } else Cartaz(480) { conteudo() }
 }
 
 /** Escolher a lista: link (http/https) ou arquivo do aparelho. */

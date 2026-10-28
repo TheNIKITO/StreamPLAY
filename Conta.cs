@@ -43,6 +43,24 @@ public static class Conta
         public double? FaturaValor { get; init; }
         public int Limite { get; init; }   // limite de aparelhos (0 = sem limite)
         public string Lista { get; init; }  // link da lista que o painel entrega com o login (vazio = o cliente escolhe)
+        public string PixUrl { get; init; } // servidor do Pix automático (vazio = desligado no painel)
+    }
+
+    /// <summary>Pix automático: o QR Code (PNG em base64) e o "copia e cola" do que o cliente deve.</summary>
+    public record Pix(bool Pendente, double Valor, int Faturas, string Copia, string Qr);
+
+    /// <summary>Pede ao servidor do Pix (Mercado Pago) o Pix do que está em aberto. Erro: a mensagem do servidor.</summary>
+    public static async Task<Pix> PixAsync(string url, string acessoId, CancellationToken ct = default)
+    {
+        var corpo = new StringContent(JsonSerializer.Serialize(new { acesso = acessoId }), Encoding.UTF8, "application/json");
+        using var resp = await Http.PostAsync(url.TrimEnd('/') + "/pix", corpo, ct);
+        using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+        var j = doc.RootElement;
+        string S(string n) => j.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+        if (!resp.IsSuccessStatusCode) throw new InvalidOperationException(S("erro") ?? "Não foi possível gerar o Pix agora.");
+        return new(j.TryGetProperty("pendente", out var p) && p.ValueKind == JsonValueKind.True,
+            j.TryGetProperty("valor", out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : 0,
+            j.TryGetProperty("faturas", out var f) && f.ValueKind == JsonValueKind.Number ? f.GetInt32() : 1, S("copia"), S("qr"));
     }
 
     /// <param name="Aparelhos">bloqueado porque o limite de aparelhos está cheio (não é falta de pagamento)</param>
@@ -226,6 +244,7 @@ public static class Conta
             FaturaValor = fatura is { } fb ? Numero(fb, "valor") : null,
             Limite = (int)(Numero(f, "limite") ?? 0),
             Lista = Texto(f, "lista"),
+            PixUrl = Texto(f, "pixUrl"),
         };
     }
 
