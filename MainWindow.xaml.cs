@@ -113,12 +113,22 @@ public partial class MainWindow : Window
 
     // ---------- Lista ----------
 
-    public async Task LoadLibrary(bool quiet = false)
+    /// <summary>
+    /// Abre a lista. Sem quiet, mostra a barra com a % (na abertura, ou na tela de troca de lista quando ela passa
+    /// o próprio andamento); com quiet, recarrega por trás e só avisa no fim.
+    /// </summary>
+    public async Task LoadLibrary(bool quiet = false, IProgress<double> andamento = null)
     {
         if (string.IsNullOrWhiteSpace(Store.D.Source)) { ShowSetup(null); EndSplash(); return; }
+        if (!quiet && andamento == null)
+        {
+            ReabrirAbertura();
+            andamento = new Progress<double>(MostrarAndamento);
+            MostrarAndamento(0);
+        }
         try
         {
-            var lib = await M3U.LoadAsync(Store.D.Source);
+            var lib = await M3U.LoadAsync(Store.D.Source, andamento);
             SetLibrary(lib);
             Watch();
             if (quiet) { Toast("Lista atualizada  •  " + lib.Summary); Avisar("Lista atualizada  •  " + lib.Summary); }
@@ -208,12 +218,12 @@ public partial class MainWindow : Window
         Navigate(_tab ?? Store.D.Tab ?? "home");
     }
 
-    public async void UseSource(string source)
+    public async void UseSource(string source, IProgress<double> andamento)
     {
         Store.D.Source = source;
         Store.Save();
         _tab = null;
-        await LoadLibrary();
+        await LoadLibrary(andamento: andamento);
     }
 
     // ---------- Conta (PLAYGER) ----------
@@ -229,7 +239,6 @@ public partial class MainWindow : Window
         if (string.IsNullOrEmpty(Store.D.AcessoId)) { ShowLogin(null); EndSplash(); return false; }
         SplashText.Text = "Verificando seu acesso...";
         var r = await Conta.VerificarAsync(Store.D.AcessoId);
-        SplashText.Text = "Carregando sua lista...";
         if (r.Estado == Conta.Estado.Liberado) { AceitarConta(r); AvisarVencimento(r); return true; }
         if (r.Estado == Conta.Estado.SemConexao && DateTime.Now - Store.D.ContaOk < Tolerancia)
         {
@@ -253,22 +262,31 @@ public partial class MainWindow : Window
         {
             var r = await Conta.VerificarAsync(Store.D.AcessoId);
             if (NaTelaDeConta) return;
-            if (r.Estado == Conta.Estado.Liberado) AceitarConta(r);
+            if (r.Estado == Conta.Estado.Liberado) { if (AceitarConta(r)) await LoadLibrary(quiet: true); }
             else if (r.Estado != Conta.Estado.SemConexao || DateTime.Now - Store.D.ContaOk > Tolerancia) MostrarConta(r);
         }
         finally { _verificandoConta = false; }
     }
 
-    void AceitarConta(Conta.Resultado r)
+    /// <summary>Guarda a conta liberada. Devolve true quando o painel mandou outra lista (aí a lista precisa ser recarregada).</summary>
+    bool AceitarConta(Conta.Resultado r)
     {
         ContaAtual = r;
         Store.D.ContaOk = DateTime.Now;
         if (!string.IsNullOrEmpty(r.Acesso?.Login)) Store.D.Login = r.Acesso.Login;
+        // a lista vem do painel (PLAYGER) junto com o login: o cliente não digita nem vê o link
+        var lista = r.Acesso?.Lista?.Trim();
+        bool mudou = !string.IsNullOrEmpty(lista) && M3U.IsUrl(lista) && lista != Store.D.Source;
+        if (mudou) Store.D.Source = lista;
         Store.Save();
         _ultimaConta = DateTime.Now;
         _contaTimer.Start();
         Online(Store.D.AcessoId);
+        return mudou;
     }
+
+    /// <summary>A lista é a que o painel manda com o login (o botão "Trocar lista" some).</summary>
+    public bool ListaDoPainel => !string.IsNullOrWhiteSpace(ContaAtual?.Acesso?.Lista);
 
     // Aparece como online no painel enquanto a conta está liberada e o app aberto.
     void Online(string id)
@@ -355,9 +373,9 @@ public partial class MainWindow : Window
     /// <summary>A tela de login confirmou a conta.</summary>
     public async void ContaLiberada(Conta.Resultado r)
     {
-        AceitarConta(r);
+        var outraLista = AceitarConta(r);
         PageHost.Content = null;
-        if (Lib != null) { TopBar.Visibility = Visibility.Visible; Navigate(_tab ?? Store.D.Tab ?? "home"); }
+        if (Lib != null && !outraLista) { TopBar.Visibility = Visibility.Visible; Navigate(_tab ?? Store.D.Tab ?? "home"); }
         else await LoadLibrary();
         AvisarVencimento(r);
     }
@@ -665,7 +683,7 @@ public partial class MainWindow : Window
             SplashText.Text = "Procurando atualizações...";
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(6));
             var r = await Updater.CheckAsync(timeout.Token);
-            if (r == null || !Updater.CanInstall()) { SplashText.Text = "Carregando sua lista..."; return false; }
+            if (r == null || !Updater.CanInstall()) return false;
 
             var v = r.Version.ToString(3);
             SplashText.BeginAnimation(OpacityProperty, null);
@@ -703,7 +721,6 @@ public partial class MainWindow : Window
             await Task.Delay(1100);
         }
         SplashBar.Visibility = Visibility.Collapsed;
-        SplashText.Text = "Carregando sua lista...";
         return false;
     }
 
@@ -805,6 +822,26 @@ public partial class MainWindow : Window
         SplashScale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, new DoubleAnimation(0.86, 1, TimeSpan.FromMilliseconds(1100)) { EasingFunction = ease });
         SplashScale.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleYProperty, new DoubleAnimation(0.86, 1, TimeSpan.FromMilliseconds(1100)) { EasingFunction = ease });
         SplashText.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(400)) { BeginTime = TimeSpan.FromMilliseconds(900) });
+    }
+
+    // Barra da abertura enquanto a lista carrega: só a %, sem texto
+    void MostrarAndamento(double p)
+    {
+        SplashBar.Visibility = Visibility.Visible;
+        SplashFill.Width = p * SplashBar.Width;
+        SplashText.Text = $"{(int)Math.Round(p * 100)}%";
+    }
+
+    // Depois do login a abertura já tinha sumido: volta com ela (sem a animação do logo) para mostrar a barra
+    void ReabrirAbertura()
+    {
+        if (Splash.Visibility == Visibility.Visible) return;
+        Splash.BeginAnimation(OpacityProperty, null);
+        Splash.Opacity = 1;
+        SplashText.BeginAnimation(OpacityProperty, null);
+        SplashText.Opacity = 1;
+        Splash.Visibility = Visibility.Visible;
+        _splashStart = DateTime.MinValue;
     }
 
     async void EndSplash()

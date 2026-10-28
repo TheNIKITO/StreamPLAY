@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -84,6 +85,7 @@ import com.thenikito.streamplay.Kind
 import com.thenikito.streamplay.Tela
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 fun Context.activity(): Activity? {
     var c: Context? = this
@@ -359,12 +361,28 @@ fun Abertura() {
                     altura = if (medidas().largo) 60.dp else 36.dp,
                 )
                 Spacer(Modifier.height(28.dp))
-                Text(
+                // carregando a lista: só a barra com a %, sem texto
+                val p = Estado.andamento
+                if (p >= 0f && Estado.textoAbertura.isEmpty()) Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.graphicsLayer { alpha = texto.value },
+                ) {
+                    Text("${(p * 100).roundToInt()}%", color = Cor.Sub, fontSize = 15.sp)
+                    BarraAndamento(p, Modifier.padding(top = 12.dp).width(if (medidas().largo) 320.dp else 220.dp))
+                } else Text(
                     Estado.textoAbertura, color = Cor.Sub, fontSize = 15.sp, textAlign = TextAlign.Center,
                     modifier = Modifier.graphicsLayer { alpha = texto.value },
                 )
             }
         }
+    }
+}
+
+/** Barra fina de andamento (0 a 1), vermelha sobre um trilho claro. */
+@Composable
+fun BarraAndamento(p: Float, modifier: Modifier = Modifier) {
+    Box(modifier.height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color(0x33FFFFFF))) {
+        Box(Modifier.fillMaxHeight().fillMaxWidth(p.coerceIn(0f, 1f)).background(Cor.Vermelho))
     }
 }
 

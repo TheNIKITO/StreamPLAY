@@ -13,11 +13,14 @@ public partial class SettingsView : UserControl
         InitializeComponent();
         var src = Store.D.Source ?? "";
         bool file = !M3U.IsUrl(src);
+        // o link da lista online não aparece (é do painel, não do cliente); arquivo do PC mostra o caminho
         SourceText.Text = src;
         SourceText.ToolTip = src;
+        SourceText.Visibility = file ? Visibility.Visible : Visibility.Collapsed;
         CountText.Text = MainWindow.I.Lib?.Summary ?? "";
         WatchText.Text = file ? "● Atualização automática ligada: salve o arquivo e o app reorganiza sozinho." : "● Lista online: o app confere novidades sozinho a cada 10 minutos (e quando você volta para ele).";
         EditBtn.Visibility = FolderBtn.Visibility = file ? Visibility.Visible : Visibility.Collapsed;
+        if (MainWindow.I.ListaDoPainel) ChangeBtn.Visibility = Visibility.Collapsed;
         var conta = MainWindow.I.ContaAtual?.Acesso;
         ContaText.Text = $"Conectado como {Store.D.Login}";
         var sub = new List<string>();
@@ -27,7 +30,6 @@ public partial class SettingsView : UserControl
         ContaSub.Text = linha.Length > 0 ? char.ToUpper(linha[0]) + linha[1..] : "Acesso liberado.";
         FullBox.IsChecked = Store.D.TelaCheiaAoAbrir;
         NextBox.IsChecked = Store.D.AutoNext;
-        Guide.Text = SetupView.GuideText;
 
         foreach (var ms in new[] { 1000, 1500, 3000, 5000, 8000 })
         {

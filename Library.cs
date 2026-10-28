@@ -209,19 +209,40 @@ public static class M3U
     static string _fonte;
     static Library _principal, _canais;
 
-    public static async Task<Library> LoadAsync(string source)
+    /// <summary>
+    /// Andamento do carregamento (0 a 1) repartido em etapas: baixar, organizar, canais. Só avisa a tela quando o
+    /// número da % muda, e nunca volta para trás.
+    /// </summary>
+    public sealed class Andamento(IProgress<double> tela)
     {
-        var principal = await Ler(source, conditional: false);
+        int _pc = -1;
+        public void Marcar(double v)
+        {
+            var pc = (int)(Math.Clamp(v, 0, 1) * 100);
+            if (pc <= _pc) return;
+            _pc = pc;
+            tela?.Report(pc / 100.0);
+        }
+        public Action<double> Trecho(double de, double ate) => v => Marcar(de + (ate - de) * Math.Clamp(v, 0, 1));
+    }
+
+    public static async Task<Library> LoadAsync(string source, IProgress<double> progresso = null)
+    {
+        var a = progresso == null ? null : new Andamento(progresso);
+        var principal = await Ler(source, conditional: false, a?.Trecho(0, 0.55), a?.Trecho(0.55, 0.88));
         Library canais = null;
         var comp = Companheira(source);
         if (comp != null)
         {
-            try { canais = await Ler(comp, conditional: false); }
+            try { canais = await Ler(comp, conditional: false, null, a?.Trecho(0.88, 0.97)); }
             catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) { Esquecer(comp); }
             catch (Exception ex) when (ex is HttpRequestException or IOException or TaskCanceledException or UnauthorizedAccessException) { }
         }
         (_fonte, _principal, _canais) = (source, principal, canais);
-        return await Task.Run(() => Juntar(principal, canais));
+        a?.Marcar(0.97);
+        var lib = await Task.Run(() => Juntar(principal, canais));
+        a?.Marcar(1);
+        return lib;
     }
 
     /// <summary>Confere a lista online e o canais.m3u; baixa só o que mudou. Devolve null se nada mudou.</summary>
@@ -251,12 +272,12 @@ public static class M3U
     }
 
     // Lê e organiza um arquivo (link ou caminho). Com conditional, devolve null se não mudou desde a última vez.
-    static async Task<Library> Ler(string source, bool conditional)
+    static async Task<Library> Ler(string source, bool conditional, Action<double> baixando = null, Action<double> organizando = null)
     {
         string text, baseDir;
         if (IsUrl(source))
         {
-            var bytes = conditional ? await Download(source, true) : await BaixarOuSalva(source);
+            var bytes = conditional ? await Download(source, true) : await BaixarOuSalva(source, baixando);
             if (bytes == null) return null;
             text = Decode(bytes);
             baseDir = source;
@@ -267,7 +288,8 @@ public static class M3U
             text = Decode(await ReadSharedAsync(source));
             baseDir = Path.GetDirectoryName(Path.GetFullPath(source));
         }
-        return await Task.Run(() => Parse(text, baseDir));
+        baixando?.Invoke(1);
+        return await Task.Run(() => Parse(text, baseDir, organizando));
     }
 
     /// <summary>
@@ -334,15 +356,15 @@ public static class M3U
     }
 
     /// <summary>Conteúdo do link para abrir o app: da internet só se mudou desde a cópia salva; sem internet, a cópia.</summary>
-    static async Task<byte[]> BaixarOuSalva(string url)
+    static async Task<byte[]> BaixarOuSalva(string url, Action<double> baixando = null)
     {
         try
         {
-            var novo = await Download(url, conditional: File.Exists(Salva(url)));
+            var novo = await Download(url, conditional: File.Exists(Salva(url)), baixando);
             if (novo != null) return novo;
             if (LerSalva(url) is { } salva) return salva;
             Esquecer(url);   // a cópia não abre (de outra conta/PC, ou estragada): baixa tudo de novo
-            return await Download(url, conditional: false);
+            return await Download(url, conditional: false, baixando);
         }
         catch (Exception ex) when (ex is HttpRequestException { StatusCode: null } or TaskCanceledException)
         {
@@ -383,17 +405,17 @@ public static class M3U
         catch (Exception ex) { App.Log(ex); }
     }
 
-    static async Task<byte[]> Download(string url, bool conditional)
+    static async Task<byte[]> Download(string url, bool conditional, Action<double> baixando = null)
     {
         Versao v;
         lock (Versoes) { if (!Versoes.TryGetValue(url, out v)) Versoes[url] = v = VersaoSalva(url); }
         using var req = new HttpRequestMessage(HttpMethod.Get, url);
         if (conditional && v.ETag != null) req.Headers.TryAddWithoutValidation("If-None-Match", v.ETag);
         if (conditional && v.LastModified != null) req.Headers.TryAddWithoutValidation("If-Modified-Since", v.LastModified);
-        using var resp = await Http.SendAsync(req);
+        using var resp = await Http.SendAsync(req, baixando == null ? HttpCompletionOption.ResponseContentRead : HttpCompletionOption.ResponseHeadersRead);
         if (resp.StatusCode == System.Net.HttpStatusCode.NotModified) return null;
         resp.EnsureSuccessStatusCode();
-        var bytes = await resp.Content.ReadAsByteArrayAsync();
+        var bytes = await LerCorpo(resp, baixando, url);
         v.ETag = resp.Headers.ETag?.ToString();
         v.LastModified = resp.Content.Headers.LastModified?.ToString("R");
         var hash = Convert.ToHexString(SHA1.HashData(bytes));
@@ -401,6 +423,35 @@ public static class M3U
         v.Hash = hash;
         Guardar(url, bytes, v);
         return bytes;
+    }
+
+    // Baixa o conteúdo avisando o andamento. Com compressão o servidor não diz o tamanho final: usa o da cópia salva
+    // (a última versão da lista) como estimativa, ou uma curva que se aproxima de 100% sem chegar.
+    static async Task<byte[]> LerCorpo(HttpResponseMessage resp, Action<double> baixando, string url)
+    {
+        if (baixando == null) return await resp.Content.ReadAsByteArrayAsync();
+        long total = resp.Content.Headers.ContentLength ?? 0;
+        if (total <= 0) try { total = File.Exists(Salva(url)) ? new FileInfo(Salva(url)).Length : 0; } catch { }
+        using var s = await resp.Content.ReadAsStreamAsync();
+        using var ms = new MemoryStream();
+        using var parado = new CancellationTokenSource();   // lendo aos poucos, o Timeout do HttpClient não vale mais
+        var buf = new byte[81920];
+        try
+        {
+            while (true)
+            {
+                parado.CancelAfter(TimeSpan.FromSeconds(30));
+                int n = await s.ReadAsync(buf, parado.Token);
+                if (n == 0) break;
+                ms.Write(buf, 0, n);
+                baixando(total > 0 ? Math.Min(0.99, ms.Length / (double)total) : 1 - 1 / (1 + ms.Length / 8e6));
+            }
+        }
+        catch (OperationCanceledException) when (parado.IsCancellationRequested)
+        {
+            throw new TaskCanceledException("A lista parou de chegar (sem resposta há 30 s).");
+        }
+        return ms.ToArray();
     }
 
     // O Bloco de Notas pode estar gravando o arquivo: tenta algumas vezes com compartilhamento.
@@ -426,7 +477,7 @@ public static class M3U
         catch (DecoderFallbackException) { return Encoding.Latin1.GetString(bytes); }
     }
 
-    public static Library Parse(string text, string baseDir)
+    public static Library Parse(string text, string baseDir, Action<double> organizando = null)
     {
         var lib = new Library();
         var cats = new Dictionary<(Kind, string), Category>();
@@ -435,9 +486,11 @@ public static class M3U
         var opts = new List<string>();
         int order = 0, catOrder = 0;
 
-        foreach (var raw in text.Split('\n'))
+        var linhas = text.Split('\n');
+        for (int n = 0; n < linhas.Length; n++)
         {
-            var line = raw.Trim();
+            if ((n & 4095) == 0) organizando?.Invoke(n / (double)linhas.Length);
+            var line = linhas[n].Trim();
             if (line.Length == 0) continue;
             if (line.StartsWith("#EXTINF", StringComparison.OrdinalIgnoreCase)) { inf = line; grp = null; opts = new List<string>(); continue; }
             if (line.StartsWith("#EXTM3U", StringComparison.OrdinalIgnoreCase))

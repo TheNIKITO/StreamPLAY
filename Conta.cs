@@ -42,6 +42,7 @@ public static class Conta
         public DateTime? FaturaVenc { get; init; }
         public double? FaturaValor { get; init; }
         public int Limite { get; init; }   // limite de aparelhos (0 = sem limite)
+        public string Lista { get; init; }  // link da lista que o painel entrega com o login (vazio = o cliente escolhe)
     }
 
     /// <param name="Aparelhos">bloqueado porque o limite de aparelhos está cheio (não é falta de pagamento)</param>
@@ -224,6 +225,7 @@ public static class Conta
             FaturaVenc = fatura is { } fa ? Data(fa, "venc") : null,
             FaturaValor = fatura is { } fb ? Numero(fb, "valor") : null,
             Limite = (int)(Numero(f, "limite") ?? 0),
+            Lista = Texto(f, "lista"),
         };
     }
 

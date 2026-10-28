@@ -8,6 +8,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileNotFoundException
+import java.io.FilterInputStream
 import java.io.IOException
 import java.io.InputStream
 import java.io.InputStreamReader
@@ -62,13 +63,28 @@ object Fonte {
         return URL(u, ARQUIVO_CANAIS).toString()
     }
 
-    /** Lê a lista e o canais.m3u ao lado dela. [progresso] recebe textos como "Organizando sua lista... 120 mil itens". */
-    suspend fun carregar(p: Pastas, fonte: String, progresso: (String) -> Unit): Library = withContext(Dispatchers.IO) {
-        if (isUrl(fonte)) progresso("Baixando sua lista...")
-        val a = ler(p, fonte, condicional = false, SALVA, progresso)!!
+    /**
+     * Andamento do carregamento (0 a 1) repartido em etapas: baixar, organizar, canais. Só avisa a tela quando o
+     * número da % muda, e nunca volta para trás.
+     */
+    class Andamento(private val tela: (Float) -> Unit) {
+        private var pc = -1
+        fun marcar(v: Double) {
+            val p = (v.coerceIn(0.0, 1.0) * 100).toInt()
+            if (p <= pc) return
+            pc = p
+            tela(p / 100f)
+        }
+        fun trecho(de: Double, ate: Double): (Double) -> Unit = { marcar(de + (ate - de) * it.coerceIn(0.0, 1.0)) }
+    }
+
+    /** Lê a lista e o canais.m3u ao lado dela. [progresso] recebe o andamento de 0 a 1 (para a barra com a %). */
+    suspend fun carregar(p: Pastas, fonte: String, progresso: (Float) -> Unit): Library = withContext(Dispatchers.IO) {
+        val an = Andamento(progresso)
+        val a = ler(p, fonte, condicional = false, SALVA, an.trecho(0.0, 0.55), an.trecho(0.55, 0.88))!!
         val comp = companheira(fonte)
         val b = if (comp == null) null else try {
-            ler(p, comp, condicional = false, SALVA_CANAIS, progresso)
+            ler(p, comp, condicional = false, SALVA_CANAIS, organizando = an.trecho(0.88, 0.97))
         } catch (_: IOException) {
             null   // sem canais.m3u (ou fora do ar): só a lista
         }
@@ -76,7 +92,8 @@ object Fonte {
         this@Fonte.fonte = fonte
         principal = a
         canais = b
-        juntar(a, b)
+        an.marcar(0.97)
+        juntar(a, b).also { an.marcar(1.0) }
     }
 
     /** Confere a lista e o canais.m3u; baixa só o que mudou. Devolve null se nada mudou. */
@@ -84,11 +101,11 @@ object Fonte {
         val a0 = principal
         if (fonte != this@Fonte.fonte || a0 == null) return@withContext carregar(p, fonte) {}
         var mudou = false
-        ler(p, fonte, condicional = true, SALVA) {}?.let { principal = it; mudou = true }
+        ler(p, fonte, condicional = true, SALVA)?.let { principal = it; mudou = true }
         val comp = companheira(fonte)
         if (comp != null) {
             try {
-                ler(p, comp, condicional = true, SALVA_CANAIS) {}?.let { canais = it; mudou = true }
+                ler(p, comp, condicional = true, SALVA_CANAIS)?.let { canais = it; mudou = true }
             } catch (e: ErroHttp) {
                 if (e.codigo == 404) {
                     // o canais.m3u foi apagado: os canais saem do app
@@ -104,10 +121,10 @@ object Fonte {
     }
 
     /** A última cópia baixada desta lista (e dos canais), para abrir sem internet (ou null). */
-    suspend fun carregarSalva(p: Pastas, fonte: String, progresso: (String) -> Unit): Library? = withContext(Dispatchers.IO) {
+    suspend fun carregarSalva(p: Pastas, fonte: String): Library? = withContext(Dispatchers.IO) {
         val f = File(p.dados, SALVA)
         if (!f.exists()) return@withContext null
-        val a = ler(f, if (isUrl(fonte)) fonte else null, progresso)
+        val a = ler(f, if (isUrl(fonte)) fonte else null) {}
         val fc = File(p.dados, SALVA_CANAIS)
         val comp = companheira(fonte)
         val b = if (comp != null && fc.exists()) ler(fc, comp) {} else null
@@ -157,14 +174,19 @@ object Fonte {
     }
 
     // Lê um arquivo (link ou content://). Com condicional, devolve null se não mudou desde a última vez.
-    private fun ler(p: Pastas, origem: String, condicional: Boolean, salvarComo: String, progresso: (String) -> Unit): Library? {
+    private fun ler(
+        p: Pastas, origem: String, condicional: Boolean, salvarComo: String,
+        baixando: (Double) -> Unit = {}, organizando: (Double) -> Unit = {},
+    ): Library? {
         val v = synchronized(versoes) { versoes.getOrPut(origem) { Versao() } }
         val tmp = File(p.cache, "$salvarComo.tmp")
         val hash: String
         if (isUrl(origem)) {
             val c = abrir(origem, if (condicional) v else null) ?: return null
             try {
-                hash = c.inputStream.use { copiar(it, tmp) }
+                // com compressão o servidor não diz o tamanho final: usa o da última cópia salva como estimativa
+                val total = c.getHeaderField("Content-Length")?.toLongOrNull()?.takeIf { it > 0 } ?: File(p.dados, salvarComo).length()
+                hash = c.inputStream.use { copiar(it, tmp, total, baixando) }
                 v.etag = c.getHeaderField("ETag")
                 v.lastModified = c.getHeaderField("Last-Modified")
             } finally {
@@ -178,22 +200,30 @@ object Fonte {
             tmp.delete()
             return null
         }
-        val lib = ler(tmp, if (isUrl(origem)) origem else null, progresso)
+        baixando(1.0)
+        val lib = ler(tmp, if (isUrl(origem)) origem else null, organizando)
         v.hash = hash
         val salva = File(p.dados, salvarComo)
         if (!tmp.renameTo(salva)) { tmp.copyTo(salva, true); tmp.delete() }
         return lib
     }
 
-    private fun ler(f: File, base: String?, progresso: (String) -> Unit): Library {
-        progresso("Organizando sua lista...")
+    private fun ler(f: File, base: String?, organizando: (Double) -> Unit): Library {
+        organizando(0.0)
         val cs = if (utf8Valido(f)) Charsets.UTF_8 else Charsets.ISO_8859_1
-        return InputStreamReader(FileInputStream(f), cs).buffered(1 shl 16).use { r ->
-            M3U.parse(r, base) { n -> progresso("Organizando sua lista...  ${milhares(n)} itens") }
+        val total = f.length().coerceAtLeast(1).toDouble()
+        val contador = Contador(FileInputStream(f))
+        return InputStreamReader(contador, cs).buffered(1 shl 16).use { r ->
+            M3U.parse(r, base) { organizando(contador.lidos / total) }
         }
     }
 
-    private fun milhares(n: Int) = if (n >= 1000) "${n / 1000} mil" else n.toString()
+    /** Conta os bytes já lidos do arquivo (o andamento de "organizando" é a parte do arquivo já lida). */
+    private class Contador(ins: InputStream) : FilterInputStream(ins) {
+        var lidos = 0L
+        override fun read(): Int = super.read().also { if (it >= 0) lidos++ }
+        override fun read(b: ByteArray, off: Int, len: Int): Int = super.read(b, off, len).also { if (it > 0) lidos += it }
+    }
 
     // listas antigas salvas em Latin-1 (Bloco de Notas) continuam com os acentos certos
     private fun utf8Valido(f: File): Boolean {
@@ -210,15 +240,19 @@ object Fonte {
         }
     }
 
-    private fun copiar(ins: InputStream, destino: File): String {
+    // sem o tamanho total, o andamento segue uma curva que se aproxima de 100% sem chegar
+    private fun copiar(ins: InputStream, destino: File, total: Long = 0, baixando: (Double) -> Unit = {}): String {
         val md = MessageDigest.getInstance("SHA-1")
         destino.outputStream().use { out ->
             val buf = ByteArray(1 shl 16)
+            var lidos = 0L
             while (true) {
                 val n = ins.read(buf)
                 if (n < 0) break
                 md.update(buf, 0, n)
                 out.write(buf, 0, n)
+                lidos += n
+                baixando(if (total > 0) minOf(0.99, lidos.toDouble() / total) else 1 - 1 / (1 + lidos / 8e6))
             }
         }
         return md.digest().joinToString("") { "%02x".format(it.toInt() and 0xff) }

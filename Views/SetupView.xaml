@@ -50,7 +50,13 @@
           </DockPanel>
 
           <TextBlock x:Name="ErrorText" Foreground="#E87C03" FontSize="14" TextWrapping="Wrap" Margin="0,14,0,0" Visibility="Collapsed"/>
-          <TextBlock x:Name="LoadingText" Text="Carregando..." Foreground="#B3B3B3" FontSize="14" Margin="0,14,0,0" Visibility="Collapsed"/>
+          <StackPanel x:Name="Loading" Orientation="Horizontal" Margin="0,16,0,0" Visibility="Collapsed">
+            <Grid x:Name="LoadingBar" Width="280" Height="4" VerticalAlignment="Center">
+              <Border Background="#33FFFFFF" CornerRadius="2"/>
+              <Border x:Name="LoadingFill" Background="#E50914" CornerRadius="2" HorizontalAlignment="Left" Width="0"/>
+            </Grid>
+            <TextBlock x:Name="LoadingText" Text="0%" Foreground="#B3B3B3" FontSize="14" Margin="12,0,0,0" VerticalAlignment="Center"/>
+          </StackPanel>
 
           <TextBlock Text="Como organizar sua lista" FontSize="17" FontWeight="SemiBold" Margin="0,34,0,10"/>
           <Border Background="#0D0D11" CornerRadius="4" Padding="16,14" BorderBrush="#2A2A2A" BorderThickness="1">

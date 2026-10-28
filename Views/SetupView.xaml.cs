@@ -27,7 +27,6 @@ public partial class SetupView : UserControl
         InitializeComponent();
         Guide.Text = GuideText;
         if (!string.IsNullOrEmpty(error)) { ErrorText.Text = error; ErrorText.Visibility = Visibility.Visible; }
-        if (M3U.IsUrl(Store.D.Source ?? "")) UrlBox.Text = Store.D.Source;
         if (MainWindow.I?.Lib != null && string.IsNullOrEmpty(error)) BackBtn.Visibility = Visibility.Visible;
     }
 
@@ -97,7 +96,11 @@ public partial class SetupView : UserControl
     void Use(string source)
     {
         ErrorText.Visibility = Visibility.Collapsed;
-        LoadingText.Visibility = Visibility.Visible;
-        MainWindow.I.UseSource(source);
+        Loading.Visibility = Visibility.Visible;
+        MainWindow.I.UseSource(source, new Progress<double>(p =>
+        {
+            LoadingFill.Width = p * LoadingBar.Width;
+            LoadingText.Text = $"{(int)Math.Round(p * 100)}%";
+        }));
     }
 }

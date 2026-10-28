@@ -38,6 +38,8 @@ object Estado {
     var tela by mutableStateOf<Tela>(Tela.Abertura)
     var abertura by mutableStateOf(true)
     var textoAbertura by mutableStateOf("")
+    /** Barra da lista carregando (0 a 1) na abertura e em "Escolha sua lista"; -1 = sem barra. */
+    var andamento by mutableFloatStateOf(-1f)
     var lib by mutableStateOf<Library?>(null)
     var tab by mutableStateOf("home")
     var detalhes by mutableStateOf<Item?>(null)
@@ -196,9 +198,9 @@ object Estado {
         if (fonte.isNullOrBlank()) { mostrarFonte(null); return }
         if (carregandoLista) return
         carregandoLista = true
-        if (!quiet) textoAbertura = "Carregando sua lista..."
+        if (!quiet) { textoAbertura = ""; andamento = 0f }
         try {
-            val nova = Fonte.carregar(Pastas.de(app), fonte) { if (!quiet) textoAbertura = it }
+            val nova = Fonte.carregar(Pastas.de(app), fonte) { if (!quiet) andamento = it }
             Store.listaSalva = fonte
             Store.save()
             definirLista(nova)
@@ -207,7 +209,7 @@ object Estado {
             throw e
         } catch (e: Throwable) {
             val msg = Fonte.mensagemErro(e)
-            val salva = if (quiet) null else try { if (Store.listaSalva == fonte) Fonte.carregarSalva(Pastas.de(app), fonte) { textoAbertura = it } else null } catch (_: Throwable) { null }
+            val salva = if (quiet) null else try { if (Store.listaSalva == fonte) Fonte.carregarSalva(Pastas.de(app), fonte) else null } catch (_: Throwable) { null }
             when {
                 salva != null -> {
                     definirLista(salva)
@@ -280,6 +282,7 @@ object Estado {
     }
 
     fun usarFonte(fonte: String) {
+        andamento = 0f
         Store.source = fonte
         Store.save()
         scope.launch { carregarLista() }
@@ -298,7 +301,6 @@ object Estado {
         if (id.isNullOrEmpty()) { mostrarLogin(Tela.Login(null)); return false }
         textoAbertura = "Verificando seu acesso..."
         val r = Conta.verificar(id)
-        textoAbertura = "Carregando sua lista..."
         if (r.estado == Conta.Estado.Liberado) { aceitarConta(r); avisarVencimento(r); return true }
         if (r.estado == Conta.Estado.SemConexao && agora - Store.contaOk < TOLERANCIA) {
             ultimaConta = agora
@@ -318,21 +320,30 @@ object Estado {
         try {
             val r = Conta.verificar(id)
             if (naTelaDeConta) return
-            if (r.estado == Conta.Estado.Liberado) aceitarConta(r)
+            if (r.estado == Conta.Estado.Liberado) { if (aceitarConta(r)) carregarLista(quiet = true) }
             else if (r.estado != Conta.Estado.SemConexao || agora - Store.contaOk > TOLERANCIA) mostrarConta(r)
         } finally {
             verificandoConta = false
         }
     }
 
-    private fun aceitarConta(r: Conta.Resultado) {
+    /** Guarda a conta liberada. Devolve true quando o painel mandou outra lista (aí a lista precisa ser recarregada). */
+    private fun aceitarConta(r: Conta.Resultado): Boolean {
         contaAtual = r
         Store.contaOk = agora
         r.acesso?.login?.takeIf { it.isNotEmpty() }?.let { Store.login = it }
+        // a lista vem do painel (PLAYGER) junto com o login: o cliente não digita nem vê o link
+        val lista = r.acesso?.lista?.trim()
+        val mudou = !lista.isNullOrEmpty() && Fonte.isUrl(lista) && lista != Store.source
+        if (mudou) Store.source = lista
         Store.save()
         ultimaConta = agora
         atualizarOnline()
+        return mudou
     }
+
+    /** A lista é a que o painel manda com o login (o botão "Trocar lista" some). */
+    val listaDoPainel get() = !contaAtual?.acesso?.lista.isNullOrBlank()
 
     private fun avisarVencimento(r: Conta.Resultado) {
         Conta.aviso(r)?.let { toast(it); avisar(it) }
@@ -358,8 +369,8 @@ object Estado {
 
     /** A tela de login confirmou a conta (login certo ou "já paguei"). */
     fun contaLiberada(r: Conta.Resultado) {
-        aceitarConta(r)
-        if (lib != null) {
+        val outraLista = aceitarConta(r)
+        if (lib != null && !outraLista) {
             tela = Tela.Principal
             focoInicialPendente = true
         } else {

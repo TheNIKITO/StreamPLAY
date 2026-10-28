@@ -43,6 +43,8 @@ object Conta {
         val faturaValor: Double?,
         /** Limite de aparelhos (0 = sem limite). */
         val limite: Int = 0,
+        /** Link da lista que o painel entrega com o login (vazio = o cliente escolhe no app). */
+        val lista: String? = null,
     )
 
     /** [aparelhos]: bloqueado porque o limite de aparelhos está cheio (não é falta de pagamento). */
@@ -270,6 +272,7 @@ object Conta {
             faturaVenc = fatura?.let { Dia.parse(texto(it, "venc")) },
             faturaValor = fatura?.let { numero(it, "valor") },
             limite = numero(f, "limite")?.toInt() ?: 0,
+            lista = texto(f, "lista"),
         )
     }
 

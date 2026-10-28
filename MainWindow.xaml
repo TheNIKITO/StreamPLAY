@@ -157,7 +157,7 @@
             <Run Text="STREAM" Foreground="White"/><Run Text="PLAY" Foreground="#E50914"/>
           </TextBlock>
         </StackPanel>
-        <TextBlock x:Name="SplashText" Text="Carregando sua lista..." Foreground="#8C8C8C" FontSize="15" HorizontalAlignment="Center" Margin="0,18,0,0" Opacity="0"/>
+        <TextBlock x:Name="SplashText" Foreground="#8C8C8C" FontSize="15" HorizontalAlignment="Center" Margin="0,18,0,0" Opacity="0"/>
         <Grid x:Name="SplashBar" Width="320" Height="4" Margin="0,16,0,0" Visibility="Collapsed">
           <Border Background="#33FFFFFF" CornerRadius="2"/>
           <Border x:Name="SplashFill" Background="#E50914" CornerRadius="2" HorizontalAlignment="Left" Width="0"/>

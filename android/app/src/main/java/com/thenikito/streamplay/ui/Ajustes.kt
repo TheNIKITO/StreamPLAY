@@ -44,7 +44,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -117,8 +116,9 @@ fun TelaAjustes() {
             Botao("Sair da conta", { confirmar = "sair" }, Modifier.padding(top = 12.dp))
 
             Secao("Sua lista")
-            Text(Fonte.nomeAmigavel(ctx, src), color = Color.White, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(Estado.lib?.summary ?: "", color = Cor.Sub, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
+            // o link da lista online não aparece (é do painel, não do cliente); arquivo do aparelho mostra o nome
+            if (arquivo) Text(Fonte.nomeAmigavel(ctx, src), color = Color.White, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = 4.dp))
+            Text(Estado.lib?.summary ?: "", color = Cor.Sub, fontSize = 14.sp)
             Text(
                 if (arquivo) "● O app confere se o arquivo mudou sempre que você volta para ele."
                 else "● Lista online: o app confere novidades sozinho a cada 10 minutos (e quando você volta para ele).",
@@ -126,7 +126,7 @@ fun TelaAjustes() {
             )
             Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Botao("Recarregar agora", { Estado.recarregar() })
-                Botao("Trocar lista", { Estado.mostrarFonte(null) })
+                if (!Estado.listaDoPainel) Botao("Trocar lista", { Estado.mostrarFonte(null) })
             }
 
             Secao("Reprodução")
@@ -176,9 +176,6 @@ fun TelaAjustes() {
                 },
                 Modifier.padding(top = 10.dp), habilitado = !Estado.baixando,
             )
-
-            Secao("Como organizar sua lista")
-            Text(GUIA, fontSize = 12.sp, color = Cor.Sub, fontFamily = FontFamily.Monospace, lineHeight = 18.sp)
 
             Spacer(Modifier.height(24.dp))
             val vlc = Vlc.versao

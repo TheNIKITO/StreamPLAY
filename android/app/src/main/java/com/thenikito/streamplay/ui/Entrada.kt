@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -59,6 +60,7 @@ import com.thenikito.streamplay.Store
 import com.thenikito.streamplay.Tela
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 const val GUIA =
     "FILMES  →  group-title=\"FILMES\"\n" +
@@ -243,7 +245,7 @@ fun TelaBloqueio(r: Conta.Resultado) {
 fun TelaFonte(t: Tela.Fonte) {
     val erro0 = t.erro
     val ctx = LocalContext.current
-    var url by rememberSaveable { mutableStateOf(if (M3U.isUrl(Store.source ?: "")) Store.source!! else "") }
+    var url by rememberSaveable { mutableStateOf("") }
     var erro by remember(t) { mutableStateOf(erro0) }
     var carregando by remember(t) { mutableStateOf(false) }
     val podeVoltar = Estado.lib != null && erro0 == null
@@ -290,7 +292,11 @@ fun TelaFonte(t: Tela.Fonte) {
                 }
             }, habilitado = !carregando)
         }
-        if (carregando && erro == null) Text(Estado.textoAbertura.ifEmpty { "Carregando sua lista..." }, color = Cor.Sub, fontSize = 14.sp, modifier = Modifier.padding(top = 14.dp))
+        if (carregando && erro == null) Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 16.dp)) {
+            val p = Estado.andamento.coerceAtLeast(0f)
+            BarraAndamento(p, Modifier.width(240.dp))
+            Text("${(p * 100).roundToInt()}%", color = Cor.Sub, fontSize = 14.sp, modifier = Modifier.padding(start = 12.dp))
+        }
         erro?.let { Text(it, color = Color(0xFFFF6B6B), fontSize = 14.sp, modifier = Modifier.padding(top = 14.dp)) }
         Text("Como organizar sua lista", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(top = 30.dp, bottom = 8.dp))
         Text(GUIA, fontSize = 12.sp, color = Cor.Sub, fontFamily = FontFamily.Monospace, lineHeight = 18.sp)

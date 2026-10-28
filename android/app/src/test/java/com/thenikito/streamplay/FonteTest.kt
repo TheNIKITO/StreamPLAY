@@ -116,7 +116,7 @@ class FonteTest {
         assertEquals(2, baixados["/listas/canais.m3u"])
 
         // a cópia salva (para abrir sem internet) também traz os canais
-        assertEquals(4, Fonte.carregarSalva(p, fonte) {}!!.allChannels.size)
+        assertEquals(4, Fonte.carregarSalva(p, fonte)!!.allChannels.size)
 
         // o canais.m3u foi apagado: os canais dele saem do app
         arquivos.remove("/listas/canais.m3u")
@@ -129,8 +129,12 @@ class FonteTest {
     fun listaSemCanaisAoLado() = runBlocking {
         val p = pastas()
         arquivos["/lista.m3u"] = lista
-        val lib = Fonte.carregar(p, "$base/lista.m3u") {}
+        val andamento = mutableListOf<Float>()
+        val lib = Fonte.carregar(p, "$base/lista.m3u") { andamento += it }
         assertEquals(listOf("Canal A"), lib.allChannels.map { it.name })
+        // a barra só anda para a frente e termina em 100%
+        assertEquals(andamento.sorted(), andamento)
+        assertEquals(1f, andamento.last())
         // o canais.m3u aparece depois: entra na próxima conferência
         arquivos["/canais.m3u"] = canais
         assertEquals(3, Fonte.carregarSeMudou(p, "$base/lista.m3u")!!.allChannels.size)
