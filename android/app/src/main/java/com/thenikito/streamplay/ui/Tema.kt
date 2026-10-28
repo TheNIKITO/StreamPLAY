@@ -44,7 +44,11 @@ object Cor {
 
 val LocalTv = staticCompositionLocalOf { false }
 
+/** Só nos testes (versão de depuração): trata o emulador de TV como celular. */
+var forcarCelular = false
+
 fun ehTv(ctx: Context): Boolean {
+    if (forcarCelular) return false
     val ui = ctx.getSystemService(Context.UI_MODE_SERVICE) as? UiModeManager
     return ui?.currentModeType == Configuration.UI_MODE_TYPE_TELEVISION ||
         ctx.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
@@ -140,6 +144,7 @@ object Icones {
     )
     val Velocidade = icone("velocidade", "M3.5,15a8.5,8.5 0,1 1,17 0", "M12,15L16.5,9.5", contorno = true)
     val Tv = icone("tv", "M21,3H3C1.9,3 1,3.9 1,5v12c0,1.1 0.9,2 2,2h5v2h8v-2h5c1.1,0 1.99,-0.9 1.99,-2L23,5C23,3.9 22.1,3 21,3zM21,17H3V5h18V17z")
+    val Transmitir = icone("transmitir", "M2.5,8 V5.5 A1.5,1.5 0 0 1 4,4 H20 A1.5,1.5 0 0 1 21.5,5.5 V18.5 A1.5,1.5 0 0 1 20,20 H14 M2.5,12.5 A7.5,7.5 0 0 1 10,20 M2.5,16.5 A3.5,3.5 0 0 1 6,20 M2.5,19.8 V20", contorno = true)
     val Episodios = icone("episodios", "M3,5h18v2H3z", "M3,11h18v2H3z", "M3,17h18v2H3z")
     val Acima = icone("acima", "M7,15l5,-5 5,5z")
     // abas e barra de cima (traço, como no PC)

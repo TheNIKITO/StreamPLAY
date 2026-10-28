@@ -45,6 +45,8 @@ object Estado {
     var ajustes by mutableStateOf(false)
     var player by mutableStateOf<PlayRequest?>(null)
     var busca by mutableStateOf("")
+    /** Muda quando a aba deve voltar ao começo (saiu de um título aberto pela busca): a página fecha o "ver tudo". */
+    var voltarAoInicio by mutableIntStateOf(0)
     var aviso by mutableStateOf<Aviso?>(null)
     var contaAtual by mutableStateOf<Conta.Resultado?>(null)
 
@@ -409,6 +411,13 @@ object Estado {
 
     fun fecharDetalhes() {
         detalhes = null
+        // saiu de um título aberto pela busca: a aba volta para o começo (o cartão da busca some, o foco vai para o destaque)
+        if (busca.isNotEmpty()) {
+            busca = ""
+            voltarAoInicio++
+            focoAntes = null
+            focoInicialPendente = true
+        }
         aplicarPendente()
     }
 

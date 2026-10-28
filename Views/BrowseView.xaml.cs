@@ -302,6 +302,14 @@ public partial class BrowseView : UserControl, IPage
         ShowGrid(_gridTitle, _gridItems, isRoot: !TemFeed, keepScroll: true);
     }
 
+    public void Inicio()
+    {
+        CatPopup.IsOpen = false;
+        if (!TemFeed) { if (_searching) { _searching = false; ShowGrid("Minha lista", Favorites(), isRoot: true); } return; }
+        if (_gridItems != null) ExitGrid();
+        else Smooth.Reset(_sv);
+    }
+
     public void Search(string text)
     {
         if (string.IsNullOrEmpty(text))
@@ -346,7 +354,7 @@ public partial class BrowseView : UserControl, IPage
                 ShowGrid(cat.Name, cat.Items);
                 break;
             case "back":
-                if (_searching) MainWindow.I.Navigate(_home ? "home" : _kind == Kind.Series ? "series" : _kind == Kind.Movie ? "movies" : "mylist");
+                if (_searching) { MainWindow.I.FecharBusca(); Inicio(); }
                 else ExitGrid();
                 break;
             default:

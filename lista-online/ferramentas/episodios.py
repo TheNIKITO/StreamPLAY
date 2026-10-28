@@ -53,16 +53,20 @@ def salvar_cache(cache):
     os.replace(CACHE + ".tmp", CACHE)
 
 
-def em_paralelo(tarefas, fazer, cache, rotulo):
-    """Roda fazer(k, arg) para cada (k, arg) com 8 de cada vez, mostrando o andamento e salvando o cache."""
+def em_paralelo(tarefas, fazer, destino, cache, rotulo):
+    """Roda fazer(arg) para cada (k, arg) com 8 de cada vez e guarda o resultado em destino[k] (None = falhou, não
+    guarda: tenta de novo na próxima vez). Só esta linha mexe no cache — salvar enquanto as outras escreviam nele
+    dava "dictionary changed size during iteration"."""
     if not tarefas:
         return
     feitos, inicio = 0, time.time()
     with ThreadPoolExecutor(max_workers=8) as ex:
-        futuros = {ex.submit(fazer, k, a): k for k, a in tarefas}
+        futuros = {ex.submit(fazer, a): k for k, a in tarefas}
         for fut in as_completed(futuros):
             try:
-                fut.result()
+                r = fut.result()
+                if r is not None:
+                    destino[futuros[fut]] = r
             except SystemExit:
                 raise
             except Exception:
@@ -121,17 +125,19 @@ def main():
     print(f"  Episódios para completar: {len(alvos)}  |  séries: {len(series)}")
 
     # 2) o código de cada série no TMDB
-    def achar_serie(sk, a):
+    def achar_serie(a):
         r = tmdb.escolher("serie", *a)
-        cache["series"][sk] = r["id"] if r else 0
+        return r["id"] if r else 0
     faltam = [(sk, a) for sk, a in series.items() if sk not in cache["series"]]
     print(f"  Séries a procurar no TMDB: {len(faltam)}")
-    em_paralelo(faltam, achar_serie, cache, "séries")
+    em_paralelo(faltam, achar_serie, cache["series"], cache, "séries")
 
     # 3) as temporadas (1 pedido por temporada, com todos os episódios dela)
-    def baixar_temporada(chave, a):
+    def baixar_temporada(a):
         sid, temp = a
-        r = tmdb.get(f"/tv/{sid}/season/{temp}", language="pt-BR") or {}
+        r = tmdb.get(f"/tv/{sid}/season/{temp}", language="pt-BR")
+        if r is None:
+            return None   # não respondeu (ou a temporada não existe): não guarda, tenta de novo na próxima vez
         eps = {}
         for e in r.get("episodes") or []:
             nome = (e.get("name") or "").strip()
@@ -140,12 +146,12 @@ def main():
                 "ep-descricao": (e.get("overview") or "").strip(),
                 "ep-imagem": IMG + e["still_path"] if e.get("still_path") else "",
             }
-        cache["temporadas"][chave] = eps
+        return eps
     temporadas = {f"{cache['series'][sk]}|{s}": (cache["series"][sk], s)
                   for _, sk, s, _ in alvos if cache["series"].get(sk)}
     faltam = [(k, a) for k, a in sorted(temporadas.items()) if k not in cache["temporadas"]]
     print(f"  Temporadas a buscar no TMDB: {len(faltam)} (já buscadas antes: {len(temporadas) - len(faltam)})")
-    em_paralelo(faltam, baixar_temporada, cache, "temporadas")
+    em_paralelo(faltam, baixar_temporada, cache["temporadas"], cache, "temporadas")
     salvar_cache(cache)
 
     # 4) grava a lista com os campos novos

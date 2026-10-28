@@ -36,6 +36,8 @@ public partial class PlayerView : UserControl
     bool _vigiado, _simulado, _audioCorrigido, _videoCorrigido;
     long _reabrirEm = -1;
     string _panel, _aspect = "original";
+    RendererItem _cast;   // Chromecast para onde este player está mandando o vídeo (null = tocando aqui)
+    bool Transmitindo => _cast != null;
 
     static readonly CultureInfo Inv = CultureInfo.InvariantCulture;
 
@@ -67,6 +69,9 @@ public partial class PlayerView : UserControl
         _mp.EndReached += (_, _) => Dispatcher.BeginInvoke(OnEnded);
         _mp.EncounteredError += (_, _) => Dispatcher.BeginInvoke(OnError);
         Video.MediaPlayer = _mp;   // o fundo preto da área do vídeo vem da MainWindow (WM_CTLCOLORSTATIC)
+        // estava transmitindo para a TV: o próximo título também vai para lá (até a pessoa escolher "Este computador")
+        if (Transmissao.Atual != null && _mp.SetRenderer(Transmissao.Atual)) _cast = Transmissao.Atual;
+        Transmissao.Mudou += AparelhosMudaram;
         Start(_req);
         _tick.Start();
         if (_req.IsLive) LiveDot.BeginAnimation(OpacityProperty, new DoubleAnimation(1, 0.25, TimeSpan.FromSeconds(0.8)) { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever });
@@ -189,7 +194,9 @@ public partial class PlayerView : UserControl
 
         SeekRow.Visibility = live ? Visibility.Collapsed : Visibility.Visible;
         LiveRow.Visibility = live ? Visibility.Visible : Visibility.Collapsed;
-        RewBtn.Visibility = FwdBtn.Visibility = SpeedBtn.Visibility = live ? Visibility.Collapsed : Visibility.Visible;
+        RewBtn.Visibility = FwdBtn.Visibility = live ? Visibility.Collapsed : Visibility.Visible;
+        // velocidade e formato da imagem não valem na TV
+        SpeedBtn.Visibility = live || Transmitindo ? Visibility.Collapsed : Visibility.Visible;
         ChPrevBtn.Visibility = ChNextBtn.Visibility = ChannelsBtn.Visibility = many ? Visibility.Visible : Visibility.Collapsed;
         NextBtn.Visibility = _next != null ? Visibility.Visible : Visibility.Collapsed;
         EpisodesBtn.Visibility = series && _req.Item.Episodes.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
@@ -208,6 +215,7 @@ public partial class PlayerView : UserControl
         PausedSub.Text = series ? $"{_req.Episode.Label}  \"{_req.Episode.Title}\"" : "";
         PausedSub.Visibility = series ? Visibility.Visible : Visibility.Collapsed;
         PausedPlot.Text = (series ? _req.Episode.Plot : null) ?? _req.Item.Plot ?? "";
+        MostrarTransmissao();
         SetSeekVisual(0);
         Remaining.Text = "";
         UpdatePlayIcon();
@@ -244,6 +252,13 @@ public partial class PlayerView : UserControl
     {
         if (_mp == null || _closing) return;
         if (_req.IsLive && _retries++ < 2) { Retry(1500); return; }
+        if (Transmitindo)
+        {
+            ShowError($"Não foi possível transmitir para {_cast.Name}",
+                "Confira se a TV está ligada e na mesma rede Wi-Fi deste computador. Se o Windows perguntou sobre o Firewall, " +
+                "escolha Permitir para o StreamPLAY e tente de novo.");
+            return;
+        }
         string host = "";
         try { host = _req.Url.Contains("://") ? new Uri(_req.Url).Host : System.IO.Path.GetFileName(_req.Url); } catch { }
         ShowError("Não foi possível reproduzir",
@@ -308,13 +323,13 @@ public partial class PlayerView : UserControl
             UI.Fade(ResumeToast, 0, 400, () => { if (ResumeToast.Opacity < 0.05) ResumeToast.Visibility = Visibility.Collapsed; });
 
         bool overControls = Bottom.IsMouseOver || BackBtn.IsMouseOver || WinBtns.IsMouseOver || VolPop.IsMouseOver || PanelBox.IsMouseOver || NextCard.IsMouseOver || ErrorBox.IsVisible;
-        if (_chromeShown && st == VLCState.Playing && _panel == null && !_seeking && !_volDrag && !overControls && (now - _lastMove).TotalSeconds > 3.2)
+        if (_chromeShown && st == VLCState.Playing && _panel == null && !Transmitindo && !_seeking && !_volDrag && !overControls && (now - _lastMove).TotalSeconds > 3.2)
             HideChrome();
 
         if (VolPop.Visibility == Visibility.Visible && !_volDrag && !VolPop.IsMouseOver && !VolBtn.IsMouseOver && (now - _volLeft).TotalMilliseconds > 450)
             VolPop.Visibility = Visibility.Collapsed;
 
-        if (st == VLCState.Paused && !_pausedInfo && _panel == null && (now - _pausedAt).TotalSeconds > 6 && (now - _lastMove).TotalSeconds > 6 && !_req.IsLive)
+        if (st == VLCState.Paused && !_pausedInfo && _panel == null && !Transmitindo && (now - _pausedAt).TotalSeconds > 6 && (now - _lastMove).TotalSeconds > 6 && !_req.IsLive)
             ShowPausedInfo();
 
         var full = (Geometry)FindResource(MainWindow.I.IsFullscreen ? "G.ExitFull" : "G.Full");
@@ -360,7 +375,8 @@ public partial class PlayerView : UserControl
     // Vigia até o vídeo ter tocado 12 s de verdade (ou 40 s de relógio, se a internet estiver travando).
     void Vigiar(DateTime now, long t)
     {
-        if (_vigiado || _playingAt == default) return;
+        // na TV não há imagem aqui (nem precisa): a vigia acharia que o vídeo "não apareceu" e reabriria à toa
+        if (_vigiado || _playingAt == default || Transmitindo) return;
         double s = (now - _playingAt).TotalSeconds;
         if (Defeito != null && !_simulado && s >= 0.8) { _simulado = true; SimularDefeito(); }
         if (s < 1.5) return;
@@ -1038,6 +1054,72 @@ public partial class PlayerView : UserControl
         return root;
     }
 
+    // ---------- Transmitir para a TV (Chromecast) ----------
+
+    void Cast_Click(object sender, RoutedEventArgs e)
+    {
+        Transmissao.Iniciar();   // a busca de aparelhos só começa aqui (ver Transmissao)
+        TogglePanel("cast", BuildCast);
+    }
+
+    void CastStop_Click(object sender, RoutedEventArgs e) => Transmitir(null);
+
+    void AparelhosMudaram() => Rebuild("cast", BuildCast);
+
+    UIElement BuildCast()
+    {
+        var root = new StackPanel { Margin = new Thickness(20, 22, 20, 18), Width = 400 };
+        root.Children.Add(Header("Transmitir para a TV"));
+        root.Children.Add(Option("Este computador", !Transmitindo, () => Transmitir(null)));
+        foreach (var a in Transmissao.Aparelhos)
+        {
+            var alvo = a;
+            root.Children.Add(Option(a.Name, Transmitindo && Transmissao.EhOAtual(a), () => Transmitir(alvo)));
+        }
+        if (Transmissao.Aparelhos.Count == 0)
+            root.Children.Add(new TextBlock { Text = "Procurando aparelhos na rede...", FontSize = 16, Foreground = Brushes.Gray, Margin = new Thickness(40, 8, 0, 4) });
+        root.Children.Add(new TextBlock
+        {
+            Text = "Funciona com Chromecast e TVs com Chromecast embutido. A TV e este computador precisam estar na mesma rede Wi-Fi, " +
+                   "e o computador fica ligado enquanto a TV mostra o vídeo.",
+            FontSize = 13, Foreground = new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0xA2)), TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(10, 14, 0, 0), LineHeight = 19,
+        });
+        return root;
+    }
+
+    /// <summary>Manda o vídeo para o Chromecast (alvo) ou de volta para o PC (null), continuando do mesmo ponto.</summary>
+    void Transmitir(RendererItem alvo)
+    {
+        if (_mp == null || _closing) return;
+        ClosePanel();
+        if (alvo == null ? !Transmitindo : Transmitindo && Transmissao.EhOAtual(alvo)) return;
+        SaveProgress();
+        long t = _req.IsLive || _mp.Length <= 0 ? -1 : Math.Max(0, _mp.Time - 2000);
+        // O VLC só liga o aparelho novo numa reprodução que começa depois da troca: para, troca e reabre do mesmo ponto
+        _mp.Stop();
+        if (!_mp.SetRenderer(alvo)) { App.Log("Chromecast: o VLC recusou o aparelho " + alvo?.Name); alvo = null; _mp.SetRenderer(null); }
+        _cast = alvo;
+        Transmissao.Atual = alvo;
+        if (t >= 0) _reabrirEm = t;
+        _retries = 0;
+        Start(_req);
+        Osd_Show(alvo == null ? "Assistindo neste computador" : $"Transmitindo para {alvo.Name}");
+    }
+
+    void MostrarTransmissao()
+    {
+        bool on = Transmitindo;
+        CastInfo.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        ErrorPcBtn.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        CastIcon.Stroke = on ? (Brush)FindResource("Red") : Brushes.White;
+        CastBtn.ToolTip = on ? $"Transmitindo para {_cast.Name}" : "Transmitir para a TV (Chromecast)";
+        if (!on) return;
+        CastText.Text = $"Transmitindo para {_cast.Name}";
+        CastTitle.Text = _req.Title;
+        CastSub.Text = EpText.Text;
+    }
+
     // ---------- Botões ----------
 
     void Play_Click(object sender, RoutedEventArgs e) => TogglePlay();
@@ -1112,6 +1194,7 @@ public partial class PlayerView : UserControl
         _closing = true;
         _tick.Stop();
         _clickTimer.Stop();
+        Transmissao.Mudou -= AparelhosMudaram;
         Ui.Cursor = null;
         Ui.Visibility = Visibility.Collapsed;
         Video.Visibility = Visibility.Hidden;
@@ -1139,6 +1222,7 @@ public partial class PlayerView : UserControl
         SaveProgress();
         _closing = true;
         _tick.Stop();
+        Transmissao.Mudou -= AparelhosMudaram;
         try { _mp?.Stop(); } catch { }
     }
 }

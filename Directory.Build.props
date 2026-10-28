@@ -2,5 +2,8 @@
   <PropertyGroup>
     <!-- Versão do motor do VLC que vai dentro do app (pacote oficial VideoLAN.LibVLC.Windows). -->
     <VlcVersao>3.0.24</VlcVersao>
+    <!-- Revisão do pacote (mudou a lista de módulos sem mudar a versão do VLC): vira outra pasta extraída
+         (vlc\3.0.24-2), senão quem já tem a pasta antiga continuaria sem os módulos novos. -->
+    <VlcPacote>2</VlcPacote>
   </PropertyGroup>
 </Project>

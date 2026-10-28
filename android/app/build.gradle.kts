@@ -7,7 +7,7 @@ plugins {
 }
 
 // Mesma versão do app do PC: o atualizador compara com a última release do GitHub.
-val versao = "1.3.1"
+val versao = "1.3.2"
 
 // A chave que assina o APK fica fora do repositório (o GitHub é público). Quem tiver a chave consegue publicar
 // "atualizações" do app, e sem ela os aparelhos não aceitam atualizar por cima: guarde uma cópia.

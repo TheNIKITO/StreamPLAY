@@ -26,6 +26,16 @@
         <TextBlock Text="Pausado" FontSize="18" Foreground="#B3B3B3" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,56,48"/>
       </Grid>
 
+      <!-- Transmitindo para a TV: o vídeo está no Chromecast, aqui fica só o aviso (e os controles por cima) -->
+      <Grid x:Name="CastInfo" Visibility="Collapsed" IsHitTestVisible="False" Background="#0D0D11">
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" MaxWidth="760" Margin="40,0">
+          <Viewbox Width="70" Height="70"><Path Style="{StaticResource IcoS}" Data="{StaticResource G.Cast}" Stroke="#E50914"/></Viewbox>
+          <TextBlock x:Name="CastText" FontSize="20" Foreground="#B3B3B3" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,18,0,0"/>
+          <TextBlock x:Name="CastTitle" FontSize="40" FontWeight="Bold" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,8,0,0"/>
+          <TextBlock x:Name="CastSub" FontSize="18" Foreground="#D0D0D0" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="0,8,0,0"/>
+        </StackPanel>
+      </Grid>
+
       <!-- Carregando -->
       <Grid x:Name="Spinner" Width="76" Height="76" IsHitTestVisible="False" Visibility="Collapsed">
         <Ellipse Stroke="#30FFFFFF" StrokeThickness="5"/>
@@ -194,6 +204,9 @@
                 <Button x:Name="ChannelsBtn" Style="{StaticResource PBtn}" Click="Channels_Click" ToolTip="Canais" AutomationProperties.Name="Lista de canais">
                   <Path Style="{StaticResource IcoS}" Data="{StaticResource G.List}" StrokeThickness="2.2"/>
                 </Button>
+                <Button x:Name="CastBtn" Style="{StaticResource PBtn}" Click="Cast_Click" ToolTip="Transmitir para a TV (Chromecast)" AutomationProperties.Name="Transmitir para a TV">
+                  <Path x:Name="CastIcon" Style="{StaticResource IcoS}" Data="{StaticResource G.Cast}"/>
+                </Button>
                 <Button x:Name="SubsBtn" Style="{StaticResource PBtn}" Click="Subs_Click" ToolTip="Áudio e legendas" AutomationProperties.Name="Áudio e legendas">
                   <Path Style="{StaticResource IcoS}" Data="{StaticResource G.Subs}"/>
                 </Button>
@@ -266,6 +279,7 @@
           <TextBlock x:Name="ErrorText" FontSize="15" Foreground="#B3B3B3" TextWrapping="Wrap" Margin="0,10,0,24" LineHeight="22"/>
           <StackPanel Orientation="Horizontal">
             <Button Style="{StaticResource Primary}" Content="Tentar novamente" Click="Retry_Click"/>
+            <Button x:Name="ErrorPcBtn" Style="{StaticResource Secondary}" Content="Assistir no PC" Margin="10,0,0,0" Click="CastStop_Click" Visibility="Collapsed"/>
             <Button Style="{StaticResource Secondary}" Content="Voltar" Margin="10,0,0,0" Click="Back_Click"/>
           </StackPanel>
         </StackPanel>

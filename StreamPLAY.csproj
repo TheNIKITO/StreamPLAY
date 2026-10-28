@@ -10,7 +10,7 @@
     <AssemblyName>StreamPLAY</AssemblyName>
     <RootNamespace>StreamPLAY</RootNamespace>
     <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
-    <Version>1.3.1</Version>
+    <Version>1.3.2</Version>
     <Product>StreamPLAY</Product>
     <Company>TheNIKITO</Company>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -35,7 +35,7 @@
   <ItemGroup>
     <!-- o motor do VLC vai junto, compactado dentro do VlcPack.dll -->
     <ProjectReference Include="VlcPack\VlcPack.csproj" />
-    <AssemblyMetadata Include="VlcVersao" Value="$(VlcVersao)" />
+    <AssemblyMetadata Include="VlcVersao" Value="$(VlcVersao)-$(VlcPacote)" />
   </ItemGroup>
 
 </Project>

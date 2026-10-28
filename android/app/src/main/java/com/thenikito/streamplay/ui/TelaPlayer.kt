@@ -104,6 +104,7 @@ import com.thenikito.streamplay.Item
 import com.thenikito.streamplay.PlayRequest
 import com.thenikito.streamplay.PlayerControle
 import com.thenikito.streamplay.Store
+import com.thenikito.streamplay.Transmissao
 import com.thenikito.streamplay.fmtVelocidade
 import com.thenikito.streamplay.tempo
 import kotlinx.coroutines.Dispatchers
@@ -121,7 +122,7 @@ fun TelaPlayer(req: PlayRequest) {
     val tv = LocalTv.current
     val m = medidas()
     val controle = usandoControle()
-    val ctl = remember { PlayerControle(req) }
+    val ctl = remember { PlayerControle(req, ctx.applicationContext) }
     val raiz = remember { FocusRequester() }
     val play = remember { FocusRequester() }
     val seek = remember { FocusRequester() }
@@ -208,6 +209,7 @@ fun TelaPlayer(req: PlayRequest) {
         )
         // com erro, esconde a última imagem que ficou parada na tela (às vezes de outro canal)
         if (ctl.erro != null) Box(Modifier.fillMaxSize().background(Color.Black))
+        ctl.transmitindoPara?.let { InfoTransmitindo(ctl, it) }
 
         // toque: mostra/esconde os controles; dois toques nas laterais voltam/avançam 10 s
         Box(
@@ -269,6 +271,7 @@ fun TelaPlayer(req: PlayRequest) {
                 Text(e.texto, fontSize = 15.sp, color = Cor.Sub, lineHeight = 22.sp, modifier = Modifier.padding(top = 8.dp, bottom = 18.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Botao("Tentar de novo", { ctl.tentarDeNovo() }, primario = true, focusRequester = tentar)
+                    if (ctl.transmitindo) Botao("Assistir no celular", { ctl.transmitir(null) })
                     Botao("Voltar", { ctl.fechar() })
                 }
             }
@@ -402,15 +405,18 @@ private fun Controles(ctl: PlayerControle, play: FocusRequester, seek: FocusRequ
                 if (ctl.proximo != null) BotaoPlayer(Icones.Proximo, "Próximo episódio", textos) { ctl.playNext() }
                 if (ctl.temEpisodios) BotaoPlayer(Icones.Episodios, "Episódios", textos) { ctl.abrirPainel("episodios") }
                 if (ctl.variosCanais) BotaoPlayer(Icones.Tv, "Canais", textos) { ctl.abrirPainel("canais") }
+                // Chromecast só no celular/tablet: na TV o vídeo já está na TV. Só o ícone (como no YouTube): com
+                // texto a fileira não cabe na tela deitada do celular
+                if (!m.tv) BotaoPlayer(Icones.Transmitir, if (ctl.transmitindo) "Transmitindo" else "Transmitir para a TV", false, ativo = ctl.transmitindo) { ctl.abrirTransmitir() }
                 BotaoPlayer(Icones.Legendas, "Áudio e legendas", textos) { ctl.abrirPainel("legendas") }
-                if (!ctl.ehAoVivo) BotaoPlayer(Icones.Velocidade, "Velocidade", textos) { ctl.abrirPainel("velocidade") }
+                if (!ctl.ehAoVivo && !ctl.transmitindo) BotaoPlayer(Icones.Velocidade, "Velocidade", textos) { ctl.abrirPainel("velocidade") }
             }
         }
     }
 }
 
 @Composable
-private fun BotaoPlayer(icone: ImageVector, texto: String, comTexto: Boolean, fr: FocusRequester? = null, onClick: () -> Unit) {
+private fun BotaoPlayer(icone: ImageVector, texto: String, comTexto: Boolean, fr: FocusRequester? = null, ativo: Boolean = false, onClick: () -> Unit) {
     var focado by remember { mutableStateOf(false) }
     Row(
         Modifier
@@ -420,7 +426,7 @@ private fun BotaoPlayer(icone: ImageVector, texto: String, comTexto: Boolean, fr
             .padding(horizontal = if (comTexto) 12.dp else 9.dp, vertical = 9.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(icone, texto, tint = if (focado) Color.Black else Color.White, modifier = Modifier.size(28.dp))
+        Icon(icone, texto, tint = if (focado) Color.Black else if (ativo) Cor.Vermelho else Color.White, modifier = Modifier.size(28.dp))
         if (comTexto) Text(texto, color = if (focado) Color.Black else Color.White, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(start = 6.dp))
     }
 }
@@ -595,6 +601,47 @@ private fun Painel(ctl: PlayerControle) {
             "velocidade" -> PainelVelocidade(ctl)
             "episodios" -> PainelEpisodios(ctl)
             "canais" -> PainelCanais(ctl)
+            "transmitir" -> PainelTransmitir(ctl)
+        }
+    }
+}
+
+@Composable
+private fun PainelTransmitir(ctl: PlayerControle) {
+    val primeiro = focoInicial()
+    LazyColumn(contentPadding = PaddingValues(bottom = 24.dp)) {
+        item { Titulo("Transmitir para a TV") }
+        item { Opcao("Este celular", !ctl.transmitindo, primeiro) { ctl.transmitir(null) } }
+        itemsIndexed(Transmissao.aparelhos.toList()) { _, a ->
+            Opcao(Transmissao.nome(a), ctl.transmitindo && Transmissao.ehOAtual(a)) { ctl.transmitir(a) }
+        }
+        if (Transmissao.aparelhos.isEmpty()) item {
+            Row(Modifier.padding(start = 46.dp, top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                CircularProgressIndicator(color = Cor.Sub, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+                Text("Procurando aparelhos na rede...", color = Cor.Dim, fontSize = 15.sp, modifier = Modifier.padding(start = 10.dp))
+            }
+        }
+        item {
+            Text(
+                "Funciona com Chromecast e TVs com Chromecast embutido. A TV e este celular precisam estar no mesmo Wi-Fi, " +
+                    "e o StreamPLAY fica aberto (pode apagar a tela) enquanto a TV mostra o vídeo.",
+                color = Cor.Dim, fontSize = 13.sp, lineHeight = 19.sp, modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 16.dp),
+            )
+        }
+    }
+}
+
+/** Transmitindo: o vídeo está na TV; aqui fica o aviso (e os controles por cima). */
+@Composable
+private fun InfoTransmitindo(ctl: PlayerControle, aparelho: String) {
+    val r = ctl.req
+    Box(Modifier.fillMaxSize().background(Cor.Fundo), contentAlignment = Alignment.Center) {
+        Column(Modifier.padding(horizontal = 32.dp).widthIn(max = 640.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(Icones.Transmitir, null, tint = Cor.Vermelho, modifier = Modifier.size(64.dp))
+            Text("Transmitindo para $aparelho", color = Cor.Sub, fontSize = 17.sp, modifier = Modifier.padding(top = 16.dp))
+            Text(r.title, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold, lineHeight = 32.sp, modifier = Modifier.padding(top = 6.dp),
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            r.episode?.let { Text("T${it.season} • E${it.number}   ${it.title}".trimEnd(), color = Color(0xFFD0D0D0), fontSize = 15.sp, modifier = Modifier.padding(top = 6.dp)) }
         }
     }
 }

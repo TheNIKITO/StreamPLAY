@@ -25,6 +25,8 @@ class MainActivity : ComponentActivity() {
         if (BuildConfig.DEBUG) {
             intent.getStringExtra("playger_url")?.let { Conta.base = it }
             intent.getStringExtra("lista")?.let { Store.source = it; Store.save() }
+            // o emulador é de TV: "--ez celular true" mostra o app como num celular (botão de transmitir etc.)
+            if (intent.getBooleanExtra("celular", false)) com.thenikito.streamplay.ui.forcarCelular = true
         }
         Estado.iniciar(this)
         setContent { StreamPlayTema { Raiz() } }

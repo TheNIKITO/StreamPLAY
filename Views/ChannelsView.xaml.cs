@@ -191,6 +191,9 @@ public partial class ChannelsView : UserControl, IPage
         if (sv != null && off > 0) Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => sv.ScrollToVerticalOffset(off));
     }
 
+    // a categoria escolhida fica; só a busca é desfeita
+    public void Inicio() { if (_search != null) Escolher(_catKey); }
+
     public void Search(string text)
     {
         if (string.IsNullOrEmpty(text))

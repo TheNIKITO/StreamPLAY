@@ -53,6 +53,9 @@ public partial class App : Application
             "--freetype-rel-fontsize=18", "--freetype-outline-thickness=4",
             // não mostra quadros quebrados (os "quadrados" no começo do vídeo): espera o primeiro quadro bom
             "--no-avcodec-corrupted",
+            // Chromecast: se o vídeo precisar ser convertido, usa o modo que menos pesa no processador (PCs fracos);
+            // e sem o aviso de desempenho do VLC (é uma pergunta na tela que o app não mostra: travaria a transmissão)
+            "--sout-chromecast-conversion-quality=3", "--sout-chromecast-show-perf-warning=0",
         };
         // STREAMPLAY_VLC_LOG=arquivo grava o log detalhado do VLC (para investigar vídeo com problema)
         var log = Environment.GetEnvironmentVariable("STREAMPLAY_VLC_LOG");

@@ -14,6 +14,8 @@ public interface IPage
 {
     void Search(string text);
     void Refresh();
+    /// <summary>Volta a página para o começo (sem busca, sem grade aberta, no topo).</summary>
+    void Inicio();
 }
 
 public partial class MainWindow : Window
@@ -394,6 +396,8 @@ public partial class MainWindow : Window
         NavList.IsChecked = tab == "mylist";
         _navigating = false;
         CloseSearch(clear: true);
+        // a aba que ficou para trás (ou a mesma, clicada de novo) volta para o começo: busca e "ver tudo" não ficam presos nela
+        (PageHost.Content as IPage)?.Inicio();
         FrameworkElement view = tab switch
         {
             "channels" => _channels ??= new ChannelsView(Lib),
@@ -477,6 +481,8 @@ public partial class MainWindow : Window
         SearchBox.BeginAnimation(WidthProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(180)));
     }
 
+    public void FecharBusca() => CloseSearch(clear: true);
+
     void SearchBox_TextChanged(object sender, TextChangedEventArgs e) { _searchTimer.Stop(); _searchTimer.Start(); }
     void SearchBox_LostFocus(object sender, KeyboardFocusChangedEventArgs e) => CloseSearch(clear: false);
 
@@ -498,6 +504,12 @@ public partial class MainWindow : Window
     public void CloseOverlay()
     {
         if (OverlayHost.Visibility != Visibility.Visible) return;
+        // saiu de um título aberto pela busca: a aba volta para o começo
+        if (SearchBox.Text.Length > 0 && OverlayHost.Children.OfType<DetailsView>().Any())
+        {
+            CloseSearch(clear: true);
+            (PageHost.Content as IPage)?.Inicio();
+        }
         UI.Fade(OverlayHost, 0, 150, () =>
         {
             if (OverlayHost.Opacity > 0.01) return;

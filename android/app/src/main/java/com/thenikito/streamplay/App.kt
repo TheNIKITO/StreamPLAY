@@ -46,6 +46,9 @@ object Vlc {
                 arrayListOf(
                     "--no-video-title-show", "--no-stats", "--no-snapshot-preview", "--no-avcodec-corrupted",
                     "--freetype-rel-fontsize=16", "--freetype-outline-thickness=4",
+                    // Chromecast: se precisar converter, o modo que menos gasta processador (e bateria); sem o aviso de
+                    // desempenho do VLC (uma pergunta na tela que o app não mostra: travaria a transmissão)
+                    "--sout-chromecast-conversion-quality=3", "--sout-chromecast-show-perf-warning=0",
                 ),
             ).also { lib = it }
         }

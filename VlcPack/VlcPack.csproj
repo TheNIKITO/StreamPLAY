@@ -17,14 +17,18 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Fora do pacote: cabeçalhos de C e módulos que um player não usa (transmitir/gravar, visualizações de áudio, descoberta de rede). -->
+    <!-- Fora do pacote: cabeçalhos de C e módulos que um player não usa (visualizações de áudio, saídas de rede
+         pesadas como srt/rist, descoberta de rede local/upnp). Ficam os de transmitir para o Chromecast:
+         stream_out + mux + access_output http e o microdns (acha os Chromecasts na rede). -->
     <VlcArquivo Include="$(PkgVideoLAN_LibVLC_Windows)\build\x64\**\*"
                 Exclude="$(PkgVideoLAN_LibVLC_Windows)\build\x64\include\**;
-                         $(PkgVideoLAN_LibVLC_Windows)\build\x64\plugins\access_output\**;
-                         $(PkgVideoLAN_LibVLC_Windows)\build\x64\plugins\stream_out\**;
-                         $(PkgVideoLAN_LibVLC_Windows)\build\x64\plugins\mux\**;
+                         $(PkgVideoLAN_LibVLC_Windows)\build\x64\plugins\access_output\libaccess_output_livehttp_plugin.dll;
+                         $(PkgVideoLAN_LibVLC_Windows)\build\x64\plugins\access_output\libaccess_output_rist_plugin.dll;
+                         $(PkgVideoLAN_LibVLC_Windows)\build\x64\plugins\access_output\libaccess_output_shout_plugin.dll;
+                         $(PkgVideoLAN_LibVLC_Windows)\build\x64\plugins\access_output\libaccess_output_srt_plugin.dll;
                          $(PkgVideoLAN_LibVLC_Windows)\build\x64\plugins\visualization\**;
-                         $(PkgVideoLAN_LibVLC_Windows)\build\x64\plugins\services_discovery\**;
+                         $(PkgVideoLAN_LibVLC_Windows)\build\x64\plugins\services_discovery\libupnp_plugin.dll;
+                         $(PkgVideoLAN_LibVLC_Windows)\build\x64\plugins\services_discovery\libwindrive_plugin.dll;
                          $(PkgVideoLAN_LibVLC_Windows)\build\x64\plugins\video_splitter\**" />
     <EmbeddedResource Include="$(VlcZip)" LogicalName="vlc.zip" Visible="false" />
   </ItemGroup>

@@ -1,5 +1,6 @@
 package com.thenikito.streamplay
 
+import android.content.Context
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -12,6 +13,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
+import org.videolan.libvlc.RendererItem
 import org.videolan.libvlc.interfaces.IMedia
 import org.videolan.libvlc.util.VLCVideoLayout
 import java.io.File
@@ -22,7 +24,7 @@ class Osd(val texto: String)
 class Flash(val tipo: String)
 
 /** O player (VLC) com as mesmas regras do PlayerView do PC: retomar, próximo episódio, troca de canal e a vigia. */
-class PlayerControle(primeiro: PlayRequest) {
+class PlayerControle(primeiro: PlayRequest, private val app: Context) {
     var req by mutableStateOf(primeiro); private set
     var tocando by mutableStateOf(false); private set
     var ocupado by mutableStateOf(true); private set
@@ -43,6 +45,10 @@ class PlayerControle(primeiro: PlayRequest) {
     var faixas by mutableIntStateOf(0); private set
     var arrastando by mutableStateOf(false); private set
     var posArrasto by mutableFloatStateOf(0f); private set
+    /** Nome do Chromecast para onde o vídeo está indo (null = tocando no próprio aparelho). */
+    var transmitindoPara by mutableStateOf<String?>(null); private set
+    private var cast: RendererItem? = null
+    val transmitindo get() = cast != null
 
     /** A tela observa: quando muda, coloca o foco do controle remoto em [alvoFoco] ("seek", "play" ou "tentar"). */
     var pedidoFoco by mutableIntStateOf(0); private set
@@ -93,6 +99,8 @@ class PlayerControle(primeiro: PlayRequest) {
         val lib = Vlc.pronto()
         if (fechado) return
         mp = MediaPlayer(lib).also { it.setEventListener { e -> evento(e.type, e.buffering, e.voutCount) } }
+        // estava transmitindo para a TV: o próximo título também vai para lá (até a pessoa escolher "Este celular")
+        Transmissao.atual?.let { a -> if (mp?.setRenderer(a) == 0) ligarTransmissao(a) }
         talvezComecar()
     }
 
@@ -215,6 +223,13 @@ class PlayerControle(primeiro: PlayRequest) {
 
     private fun onError() {
         if (req.isLive && retries++ < 2) { retry(1500); return }
+        if (transmitindo) {
+            mostrarErro(
+                "Não foi possível transmitir para $transmitindoPara",
+                "Confira se a TV está ligada e na mesma rede Wi-Fi deste celular, e tente de novo.",
+            )
+            return
+        }
         val url = req.url ?: ""
         val host = try { if (url.contains("://")) Uri.parse(url).host ?: "" else File(url).name } catch (_: Exception) { "" }
         mostrarErro(
@@ -275,8 +290,9 @@ class PlayerControle(primeiro: PlayRequest) {
         }
 
         if (retomar != null && now - retomarEm > 7000) retomar = null
-        if (controles && playing && painel == null && !arrastando && erro == null && now - ultimoToque > 3200) esconderControles()
-        if (st == 4 && !pausadoInfo && painel == null && erro == null && now - pausadoEm > 6000 && now - ultimoToque > 6000 && !req.isLive) {
+        // transmitindo, os controles ficam à vista (a tela do celular vira o controle remoto da TV)
+        if (controles && playing && painel == null && !arrastando && erro == null && !transmitindo && now - ultimoToque > 3200) esconderControles()
+        if (st == 4 && !pausadoInfo && painel == null && erro == null && !transmitindo && now - pausadoEm > 6000 && now - ultimoToque > 6000 && !req.isLive) {
             pausadoInfo = true
             esconderControles()
         }
@@ -289,7 +305,8 @@ class PlayerControle(primeiro: PlayRequest) {
 
     private fun vigiar(now: Long, t: Long) {
         val mp = mp ?: return
-        if (vigiado || playingAt == 0L) return
+        // na TV não há imagem aqui: a vigia acharia que o vídeo "não apareceu" e reabriria à toa
+        if (vigiado || playingAt == 0L || transmitindo) return
         val s = (now - playingAt) / 1000.0
         if (s < 1.5 || now < vigiaEspera) return
         if (t > 8000 || s > 40) vigiado = true
@@ -527,12 +544,61 @@ class PlayerControle(primeiro: PlayRequest) {
         }
     }
 
+    // ---------- Transmitir para a TV (Chromecast) ----------
+
+    fun abrirTransmitir() {
+        Transmissao.iniciar(app)   // a busca de aparelhos só começa aqui
+        abrirPainel("transmitir")
+    }
+
+    /** Manda o vídeo para o Chromecast (alvo) ou de volta para este aparelho (null), continuando do mesmo ponto. */
+    fun transmitir(alvo: RendererItem?) {
+        val mp = mp ?: return
+        if (fechado) return
+        painel = null
+        if (if (alvo == null) !transmitindo else transmitindo && Transmissao.ehOAtual(alvo)) return
+        salvarProgresso()
+        val t = if (req.isLive || mp.length <= 0) -1L else maxOf(0L, mp.time - 2000)
+        val r = req
+        ocupado = true
+        // O VLC só liga o aparelho novo numa reprodução que começa depois da troca: para (fora da linha principal,
+        // parar uma transmissão pode demorar), troca e reabre do mesmo ponto
+        Thread {
+            try { mp.stop() } catch (_: Exception) { }
+            main.post {
+                if (fechado || this.mp !== mp) return@post
+                val ok = mp.setRenderer(alvo) == 0
+                if (alvo != null && ok) ligarTransmissao(alvo) else { if (alvo != null) mp.setRenderer(null); desligarTransmissao() }
+                Transmissao.definirAtual(if (ok) alvo else null)
+                if (t >= 0) reabrirEm = t
+                retries = 0
+                start(r)
+                mostrarOsd(if (cast != null) "Transmitindo para $transmitindoPara" else "Assistindo neste aparelho")
+            }
+        }.start()
+    }
+
+    private fun ligarTransmissao(a: RendererItem) {
+        cast = a
+        transmitindoPara = Transmissao.nome(a)
+        Transmissao.avisarInicio(app, transmitindoPara!!)
+    }
+
+    private fun desligarTransmissao() {
+        if (cast == null) return
+        cast = null
+        transmitindoPara = null
+        Transmissao.avisarFim(app)
+    }
+
     // ---------- Sair do app / voltar ----------
 
     fun aoParar() {
         val mp = mp ?: return
         if (fechado) return
         salvarProgresso()
+        // transmitindo, a TV continua mostrando com o celular no bolso (o serviço mantém o app acordado)
+        if (transmitindo) { if (anexado) { mp.detachViews(); anexado = false }; return }
         if (req.isLive) { recomecarAoVoltar = true; mp.stop() } else if (mp.isPlaying) mp.pause()
         if (anexado) { mp.detachViews(); anexado = false }
     }
@@ -558,6 +624,8 @@ class PlayerControle(primeiro: PlayRequest) {
     fun liberar() {
         if (!fechado) salvarProgresso()
         fechado = true
+        Transmissao.parar()
+        if (cast != null) { cast = null; Transmissao.avisarFim(app) }
         val mp = mp ?: return
         this.mp = null
         main.removeCallbacksAndMessages(null)
