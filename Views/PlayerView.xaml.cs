@@ -45,6 +45,7 @@ public partial class PlayerView : UserControl
     {
         InitializeComponent();
         _req = req;
+        App.ErroDeSom += ErroDeSomVlc;
         Loaded += OnLoaded;
         _tick.Tick += (_, _) => Tick();
         _clickTimer.Tick += (_, _) => { _clickTimer.Stop(); TogglePlay(); };
@@ -64,7 +65,7 @@ public partial class PlayerView : UserControl
         // A aceleração de vídeo vai como opção de cada mídia (automática, igual ao VLC) — ver MakeMedia.
         _mp = new MediaPlayer(App.VLC) { EnableKeyInput = false, EnableMouseInput = false };
         _mp.Playing += (_, _) => Dispatcher.BeginInvoke(OnPlaying);
-        _mp.Paused += (_, _) => Dispatcher.BeginInvoke(() => { _pausedAt = DateTime.Now; UpdatePlayIcon(); });
+        _mp.Paused += (_, _) => Dispatcher.BeginInvoke(() => { _pausedAt = DateTime.Now; UpdatePlayIcon(); AtualizarDiscord(); });
         _mp.Buffering += (_, a) => _cache = a.Cache;
         _mp.EndReached += (_, _) => Dispatcher.BeginInvoke(OnEnded);
         _mp.EncounteredError += (_, _) => Dispatcher.BeginInvoke(OnError);
@@ -129,6 +130,7 @@ public partial class PlayerView : UserControl
 
     void Start(PlayRequest req)
     {
+        AnotarReclamacoes();   // do vídeo anterior
         _req = req;
         _creditsDismissed = _nextShown = _errorShown = false;
         _cache = 0;
@@ -136,6 +138,8 @@ public partial class PlayerView : UserControl
         _startedAt = DateTime.Now;
         _playingAt = _semAudio = _semVideo = _semImagem = default;
         _vigiado = _audioCorrigido = _videoCorrigido = false;
+        _errosDeSom = 0;
+        _reclamacoes.Clear();
         _simulado = _reabrirEm >= 0;   // na reabertura da vigia, não provoca o defeito de novo
         NextCard.Visibility = ResumeToast.Visibility = ErrorBox.Visibility = Visibility.Collapsed;
         HidePausedInfo();
@@ -229,6 +233,7 @@ public partial class PlayerView : UserControl
         if (_mp == null || _closing) return;
         if (_playingAt == default) _playingAt = DateTime.Now;
         ApplyVolume();
+        AtualizarDiscord();
         UpdatePlayIcon();
         HidePausedInfo();
     }
@@ -297,6 +302,7 @@ public partial class PlayerView : UserControl
 
         if (st == VLCState.Playing) { ApplyVolume(); Vigiar(now, t); }
         if (_req.IsLive && (now - _guiaEm).TotalSeconds >= 15) AtualizarGuia();
+        if ((now - _discordEm).TotalSeconds >= 2) AtualizarDiscord();
         if (st == VLCState.Playing && t > 0 && _lastTime >= 0 && t != _lastTime) _cache = 100;
         _lastTime = t;
         if (st == VLCState.Playing && (now - _startedAt).TotalSeconds > 20) _retries = 0;
@@ -338,6 +344,49 @@ public partial class PlayerView : UserControl
         WinMaxBtn.Content = MainWindow.I.WindowState == WindowState.Maximized ? "" : "";
         NoActivate();
         MainWindow.I.SyncTopmost();
+    }
+
+    // ---------- Status do Discord ----------
+
+    DateTime _discordEm;
+    string _discordSinal;
+    long _discordInicio;
+
+    // O que está tocando vai para o perfil do Discord: série (temporada, episódio e título), filme (ano e gênero) ou canal
+    // (programa de agora), com a capa e a barra de tempo. Só manda de novo quando algo muda (ou pulou no vídeo).
+    void AtualizarDiscord()
+    {
+        _discordEm = DateTime.Now;
+        if (_mp == null || _closing || _req.Item == null) return;
+        var it = _req.Item;
+        var ep = _req.Episode;
+        var st = _mp.State;
+        if (st != VLCState.Playing && st != VLCState.Paused) return;
+        bool pausado = st == VLCState.Paused;
+        long t = _mp.Time, len = _mp.Length, agora = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        string detalhe, estado;
+        long? inicio = null, fim = null;
+        if (_req.IsLive)
+        {
+            detalhe = it.Name;
+            var (a, _) = Guia.AgoraESeguir(it, DateTime.Now);
+            estado = a != null ? $"Ao vivo · {a.Titulo}" : "Ao vivo";
+            if (_playingAt != default) inicio = new DateTimeOffset(_playingAt).ToUnixTimeMilliseconds();
+        }
+        else
+        {
+            detalhe = ep != null ? ep.Show.Name : it.Name;
+            estado = ep != null ? $"T{ep.Season}:E{ep.Number} · {ep.Title}"
+                : string.Join(" · ", new[] { it.Year, it.Genre }.Where(x => !string.IsNullOrWhiteSpace(x)));
+            if (pausado) estado = string.IsNullOrEmpty(estado) ? "Pausado" : "Pausado · " + estado;
+            else if (t > 0 && len > 0) { inicio = agora - t; fim = inicio + len; }
+        }
+        var sinal = $"{Store.D.DiscordStatus}|{detalhe}|{estado}|{inicio.HasValue}";
+        if (sinal == _discordSinal && (inicio == null || Math.Abs(inicio.Value - _discordInicio) < 3000)) return;
+        _discordSinal = sinal;
+        _discordInicio = inicio ?? 0;
+        var capa = ep?.Show?.Logo ?? it.Logo;
+        Discord.Mostrar(new(detalhe, estado, capa, ep != null ? $"{ep.Show.Name} · {ep.Label}" : it.Name, inicio, fim));
     }
 
     // ---------- Guia de programação (canais ao vivo) ----------
@@ -434,6 +483,54 @@ public partial class PlayerView : UserControl
         }
         catch (Exception ex) { App.Log(ex); }
     }
+
+    // O VLC reclamou do som ou da decodificação: junta as reclamações de 3 s e anota no erros.log, uma vez por vídeo,
+    // com o filme e o formato do áudio. O link não vai (pode ter usuário e senha do provedor).
+    int _errosDeSom;
+    readonly List<string> _reclamacoes = new();
+    string _nomeReclamado;
+    DispatcherTimer _anotar;
+    void ErroDeSomVlc(string msg) => Dispatcher.BeginInvoke(() =>
+    {
+        if (_mp == null || _closing || _errosDeSom > 0) return;
+        if (_reclamacoes.Count < 10 && !_reclamacoes.Contains(msg)) _reclamacoes.Add(msg);
+        if (_anotar != null) return;
+        _nomeReclamado = _req.Title + (_req.Episode != null ? $" {_req.Episode.Label}" : "");
+        _anotar = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        _anotar.Tick += (_, _) => AnotarReclamacoes();
+        _anotar.Start();
+    });
+
+    // também ao fechar ou trocar de vídeo: o que deu errado no comportamento do VLC não pode se perder
+    void AnotarReclamacoes()
+    {
+        _anotar?.Stop();
+        _anotar = null;
+        if (_reclamacoes.Count == 0 || _errosDeSom > 0 || _mp == null) return;
+        _errosDeSom = 1;
+        App.Log($"Som/vídeo: o VLC reclamou ao tocar \"{_nomeReclamado}\":\n  " + string.Join("\n  ", _reclamacoes) + "\n" + InfoDoAudio());
+        _reclamacoes.Clear();
+    }
+
+    string InfoDoAudio()
+    {
+        var linhas = new List<string>();
+        try
+        {
+            var faixas = _mp.Media?.Tracks ?? Array.Empty<MediaTrack>();
+            foreach (var t in faixas.Where(x => x.TrackType == TrackType.Audio))
+                linhas.Add($"  áudio {t.Id}: {Fourcc(t.Codec)}, {t.Data.Audio.Channels} canais, {t.Data.Audio.Rate} Hz" +
+                           (string.IsNullOrEmpty(t.Language) ? "" : $", {t.Language}") + (string.IsNullOrEmpty(t.Description) ? "" : $", {t.Description}"));
+            if (linhas.Count == 0) linhas.Add("  nenhuma faixa de áudio encontrada no arquivo");
+            linhas.Add($"  faixa tocando: {_mp.AudioTrack} de {_mp.AudioTrackCount}; volume {_mp.Volume}; mudo {_mp.Mute}");
+        }
+        catch (Exception ex) { linhas.Add("  (não consegui ler as faixas: " + ex.Message + ")"); }
+        linhas.Add($"  StreamPLAY {Updater.CurrentText}; VLC {App.VLC.Version} em {(App.VlcEhEmbutido ? "embutido" : App.VlcDir)}");
+        return string.Join("\n", linhas);
+    }
+
+    // código de 4 letras do formato (a52 = Dolby AC3, eac3 = Dolby Digital Plus, dts, mp4a = AAC, mpga = MP3...)
+    static string Fourcc(uint c) => new string(new[] { (char)(c & 0xFF), (char)((c >> 8) & 0xFF), (char)((c >> 16) & 0xFF), (char)(c >> 24) }).Trim();
 
     int? MelhorAudio()
     {
@@ -1190,8 +1287,11 @@ public partial class PlayerView : UserControl
     public void Close()
     {
         if (_closing) return;
+        AnotarReclamacoes();
         SaveProgress();
         _closing = true;
+        Discord.Mostrar(null);
+        App.ErroDeSom -= ErroDeSomVlc;
         _tick.Stop();
         _clickTimer.Stop();
         Transmissao.Mudou -= AparelhosMudaram;
@@ -1219,8 +1319,11 @@ public partial class PlayerView : UserControl
     public void Shutdown()
     {
         if (_closing) return;
+        AnotarReclamacoes();
         SaveProgress();
         _closing = true;
+        Discord.Mostrar(null);
+        App.ErroDeSom -= ErroDeSomVlc;
         _tick.Stop();
         Transmissao.Mudou -= AparelhosMudaram;
         try { _mp?.Stop(); } catch { }

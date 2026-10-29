@@ -30,6 +30,7 @@ public partial class SettingsView : UserControl
         ContaSub.Text = linha.Length > 0 ? char.ToUpper(linha[0]) + linha[1..] : "Acesso liberado.";
         FullBox.IsChecked = Store.D.TelaCheiaAoAbrir;
         NextBox.IsChecked = Store.D.AutoNext;
+        DiscordBox.IsChecked = Store.D.DiscordStatus;
 
         foreach (var ms in new[] { 1000, 1500, 3000, 5000, 8000 })
         {
@@ -74,6 +75,8 @@ public partial class SettingsView : UserControl
     {
         Store.D.TelaCheiaAoAbrir = FullBox.IsChecked == true;
         Store.D.AutoNext = NextBox.IsChecked == true;
+        Store.D.DiscordStatus = DiscordBox.IsChecked == true;
+        if (!Store.D.DiscordStatus) Discord.Mostrar(null);   // desligou: some na hora (ligando, o player mostra no próximo instante)
         Store.Save();
     }
 

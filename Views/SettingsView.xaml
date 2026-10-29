@@ -46,7 +46,8 @@
 
             <TextBlock Text="REPRODUÇÃO" Foreground="#8C8C8C" FontSize="12" FontWeight="Bold" Margin="0,24,0,12"/>
             <CheckBox x:Name="FullBox" Style="{StaticResource Switch}" Content="Abrir vídeos em tela cheia" Margin="0,0,0,14" Click="Opt_Click"/>
-            <CheckBox x:Name="NextBox" Style="{StaticResource Switch}" Content="Tocar o próximo episódio automaticamente" Margin="0,0,0,18" Click="Opt_Click"/>
+            <CheckBox x:Name="NextBox" Style="{StaticResource Switch}" Content="Tocar o próximo episódio automaticamente" Margin="0,0,0,14" Click="Opt_Click"/>
+            <CheckBox x:Name="DiscordBox" Style="{StaticResource Switch}" Content="Mostrar no Discord o que estou assistindo" Margin="0,0,0,18" Click="Opt_Click"/>
             <TextBlock Text="Buffer de rede (aumente se o vídeo travar)" FontSize="15" Margin="0,0,0,10"/>
             <WrapPanel x:Name="CachePanel"/>
 

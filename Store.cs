@@ -25,6 +25,8 @@ public class AppData
     // abrir o player já em tela cheia (nome novo na 1.3.1 = começa desligado para todos; o player abre como a janela está)
     public bool TelaCheiaAoAbrir { get; set; }
     public bool AutoNext { get; set; } = true;
+    // status do Discord (Rich Presence) com o que está assistindo
+    public bool DiscordStatus { get; set; } = true;
     public int Caching { get; set; } = 1500;
     public string Tab { get; set; } = "movies";
     public List<string> Favorites { get; set; } = new();

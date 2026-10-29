@@ -10,6 +10,18 @@ public partial class App : Application
 {
     public static LibVLC VLC { get; private set; }
     public static string VlcDir { get; private set; }
+
+    /// <summary>
+    /// Erro do VLC com som ou decodificação (saída de áudio que não abre, formato que não toca). O player anota no
+    /// erros.log com o filme e o formato do áudio: sem isso, um filme mudo no PC do cliente não deixava rastro.
+    /// </summary>
+    public static event Action<string> ErroDeSom;
+    // Só som e formato que não toca. Fica de fora o aviso de aceleração de vídeo (o VLC resolve sozinho, sem placa).
+    static readonly System.Text.RegularExpressions.Regex SomRx = new(
+        @"aout|mmdevice|wasapi|directsound|waveout|spdif|audio|áudio|a52|eac3|dts|could not (identify|decode)|unidentified codec|unsupported codec|is not supported",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+    static readonly System.Text.RegularExpressions.Regex VideoRx = new(@"hardware acceleration|direct3d|d3d11|dxva|picture",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
     static Task _vlcReady;
     static bool _errorOpen;
     static DateTime _lastError;
@@ -61,6 +73,12 @@ public partial class App : Application
         var log = Environment.GetEnvironmentVariable("STREAMPLAY_VLC_LOG");
         if (!string.IsNullOrEmpty(log)) { args.Remove("--quiet"); args.Add("--verbose=2"); }
         VLC = new LibVLC(args.ToArray());
+        VLC.Log += (_, e) =>
+        {
+            if (e.Level != LogLevel.Error || ErroDeSom == null) return;
+            var texto = $"{e.Module}: {e.Message}";
+            if (SomRx.IsMatch(texto) && !VideoRx.IsMatch(texto)) ErroDeSom?.Invoke(texto);
+        };
         if (!string.IsNullOrEmpty(log))
         {
             var w = new StreamWriter(log, append: true) { AutoFlush = true };
