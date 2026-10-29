@@ -685,7 +685,7 @@ public partial class MainWindow : Window
             var r = await Updater.CheckAsync(timeout.Token);
             if (r == null || !Updater.CanInstall()) return false;
 
-            var v = r.Version.ToString(3);
+            var v = Updater.Rotulo(r.Version.ToString(3));
             SplashText.BeginAnimation(OpacityProperty, null);
             SplashText.Opacity = 1;
             SplashText.Text = $"Baixando a versão {v}...";
@@ -733,14 +733,14 @@ public partial class MainWindow : Window
         {
             if (Updater.Ready != null)
             {
-                SetUpdateStatus($"A versão {Updater.Ready.Version.ToString(3)} está pronta para instalar.");
+                SetUpdateStatus($"A versão {Updater.Rotulo(Updater.Ready.Version.ToString(3))} está pronta para instalar.");
                 ShowUpdateBanner();
                 return;
             }
             SetUpdateStatus("Procurando atualizações...");
             var r = await Updater.CheckAsync();
-            if (r == null) { SetUpdateStatus($"Você está na versão mais recente ({Updater.CurrentText})."); return; }
-            var v = r.Version.ToString(3);
+            if (r == null) { SetUpdateStatus($"Você está na versão mais recente ({Updater.Rotulo(Updater.CurrentText)})."); return; }
+            var v = Updater.Rotulo(r.Version.ToString(3));
             if (!Updater.Enabled || !Updater.CanInstall())
             {
                 SetUpdateStatus($"A versão {v} está disponível. Baixe pelo GitHub.");
@@ -767,7 +767,7 @@ public partial class MainWindow : Window
         _bannerRelease = r ?? Updater.Ready;
         _bannerDownload = download;
         if (_bannerRelease == null) return;
-        var v = _bannerRelease.Version.ToString(3);
+        var v = Updater.Rotulo(_bannerRelease.Version.ToString(3));
         UpdateTitle.Text = $"StreamPLAY {v} disponível";
         UpdateText.Text = download
             ? "Esta pasta não permite atualizar sozinho. Baixe a versão nova pelo GitHub."

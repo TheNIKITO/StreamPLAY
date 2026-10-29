@@ -26,6 +26,9 @@ object Atualizador {
 
     val atual: String get() = BuildConfig.VERSION_NAME
 
+    /** Como a versão aparece para o cliente: o app ainda está em desenvolvimento ("BETA 1.3.5"). */
+    fun rotulo(versao: String) = "BETA $versao"
+
     suspend fun procurar(): Versao? = withContext(Dispatchers.IO) {
         val c = URL(API).openConnection() as HttpURLConnection
         try {

@@ -46,7 +46,7 @@ public partial class SettingsView : UserControl
         var ver = Assembly.GetExecutingAssembly().GetName().Version;
         string vlc = "";
         try { vlc = App.VLC?.Version?.Split(' ')[0]; } catch { }
-        VersionText.Text = $"StreamPLAY {ver?.ToString(3)}" + (string.IsNullOrEmpty(vlc) ? "" : $"  •  motor VLC {vlc}{(App.VlcEhEmbutido ? " (embutido)" : "")}");
+        VersionText.Text = $"StreamPLAY {Updater.Rotulo(ver?.ToString(3))}" + (string.IsNullOrEmpty(vlc) ? "" : $"  •  motor VLC {vlc}{(App.VlcEhEmbutido ? " (embutido)" : "")}");
 
         ShowUpdateStatus();
         MainWindow.I.UpdateStatusChanged += ShowUpdateStatus;
@@ -57,7 +57,7 @@ public partial class SettingsView : UserControl
     {
         var s = MainWindow.I.UpdateStatus;
         UpdateStatusText.Text = string.IsNullOrEmpty(s)
-            ? $"Versão {Updater.CurrentText}. O app procura atualizações sozinho ao abrir e a cada 30 minutos."
+            ? $"Versão {Updater.Rotulo(Updater.CurrentText)}. O app procura atualizações sozinho ao abrir e a cada 30 minutos."
             : s;
         UpdateBtn.Content = Updater.Ready != null ? "Reiniciar e atualizar" : "Procurar atualizações";
     }

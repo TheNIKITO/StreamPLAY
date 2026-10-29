@@ -164,12 +164,12 @@ fun TelaAjustes() {
 
             Secao("Atualizações")
             Text(
-                Estado.statusAtualizacao.ifEmpty { "Versão ${Atualizador.atual}. O app procura atualizações sozinho ao abrir e a cada 30 minutos." },
+                Estado.statusAtualizacao.ifEmpty { "Versão ${Atualizador.rotulo(Atualizador.atual)}. O app procura atualizações sozinho ao abrir e a cada 30 minutos." },
                 color = Cor.Sub, fontSize = 14.sp,
             )
             val nova = Estado.novaVersao
             Botao(
-                if (nova != null) "Atualizar para a versão ${nova.versao}" else "Procurar atualizações",
+                if (nova != null) "Atualizar para a versão ${Atualizador.rotulo(nova.versao)}" else "Procurar atualizações",
                 {
                     if (nova != null) ctx.activity()?.let { Estado.instalarAtualizacao(it) }
                     else scope.launch { Estado.procurarAtualizacao(manual = true) }
@@ -180,7 +180,7 @@ fun TelaAjustes() {
             Spacer(Modifier.height(24.dp))
             val vlc = Vlc.versao
             Text(
-                "StreamPLAY ${Atualizador.atual}" + (if (vlc != null) "  •  motor VLC $vlc" else ""),
+                "StreamPLAY ${Atualizador.rotulo(Atualizador.atual)}" + (if (vlc != null) "  •  motor VLC $vlc" else ""),
                 color = Cor.Dim, fontSize = 12.sp,
             )
         }

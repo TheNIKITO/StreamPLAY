@@ -482,14 +482,14 @@ object Estado {
             val v = Atualizador.procurar()
             if (v == null) {
                 novaVersao = null
-                statusAtualizacao = "Você está na versão mais recente (${Atualizador.atual})."
+                statusAtualizacao = "Você está na versão mais recente (${Atualizador.rotulo(Atualizador.atual)})."
                 return
             }
             val nova = novaVersao?.versao != v.versao
             novaVersao = v
-            statusAtualizacao = "A versão ${v.versao} está disponível."
+            statusAtualizacao = "A versão ${Atualizador.rotulo(v.versao)} está disponível."
             if (!manual && nova) bannerAtualizacao = true
-            if (nova) avisar("StreamPLAY ${v.versao} disponível: toque em Configurações para atualizar.")
+            if (nova) avisar("StreamPLAY ${Atualizador.rotulo(v.versao)} disponível: toque em Configurações para atualizar.")
         } catch (e: CancellationException) {
             throw e
         } catch (_: Throwable) {
@@ -504,9 +504,9 @@ object Estado {
         bannerAtualizacao = false
         scope.launch {
             try {
-                statusAtualizacao = "Baixando a versão ${v.versao}..."
-                val f = Atualizador.baixar(act.cacheDir, v) { p -> statusAtualizacao = "Baixando a versão ${v.versao}...  ${(p * 100).toInt()}%" }
-                statusAtualizacao = "A versão ${v.versao} está pronta para instalar."
+                statusAtualizacao = "Baixando a versão ${Atualizador.rotulo(v.versao)}..."
+                val f = Atualizador.baixar(act.cacheDir, v) { p -> statusAtualizacao = "Baixando a versão ${Atualizador.rotulo(v.versao)}...  ${(p * 100).toInt()}%" }
+                statusAtualizacao = "A versão ${Atualizador.rotulo(v.versao)} está pronta para instalar."
                 if (!Atualizador.instalar(act, f))
                     toast("Permita que o StreamPLAY instale atualizações e toque em Atualizar de novo.", fixo = false)
             } catch (e: CancellationException) {

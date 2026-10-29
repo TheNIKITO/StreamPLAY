@@ -34,6 +34,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.window.Dialog
+import com.thenikito.streamplay.Atualizador
 import com.thenikito.streamplay.Conta
 import com.thenikito.streamplay.Dia
 import com.thenikito.streamplay.Store
@@ -434,7 +435,7 @@ fun BannerAtualizacao() {
                 .pointerInput(Unit) { }
                 .padding(20.dp),
         ) {
-            Text("StreamPLAY ${v.versao} disponível", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+            Text("StreamPLAY ${Atualizador.rotulo(v.versao)} disponível", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
             Text(
                 "Tem uma versão nova do app. Atualize para ter as últimas correções.",
                 fontSize = 14.sp, color = Cor.Sub, modifier = Modifier.padding(top = 6.dp, bottom = 14.dp),

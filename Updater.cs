@@ -20,6 +20,9 @@ public static class Updater
     public static Version Current { get; } = Normalize(Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0));
     public static string CurrentText => Current.ToString(3);
 
+    /// <summary>Como a versão aparece para o cliente: o app ainda está em desenvolvimento ("BETA 1.3.5").</summary>
+    public static string Rotulo(string versao) => "BETA " + versao;
+
     // STREAMPLAY_UPDATE_URL só existe para testes locais (aponta para um JSON no formato da API do GitHub)
     static readonly string TestUrl = Environment.GetEnvironmentVariable("STREAMPLAY_UPDATE_URL");
     static readonly string Api = string.IsNullOrEmpty(TestUrl) ? $"https://api.github.com/repos/{Repo}/releases/latest" : TestUrl;
