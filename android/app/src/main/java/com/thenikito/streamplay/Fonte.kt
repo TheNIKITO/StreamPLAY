@@ -81,10 +81,10 @@ object Fonte {
     /** Lê a lista e o canais.m3u ao lado dela. [progresso] recebe o andamento de 0 a 1 (para a barra com a %). */
     suspend fun carregar(p: Pastas, fonte: String, progresso: (Float) -> Unit): Library = withContext(Dispatchers.IO) {
         val an = Andamento(progresso)
-        val a = ler(p, fonte, condicional = false, SALVA, an.trecho(0.0, 0.55), an.trecho(0.55, 0.88))!!
+        val a = lerOuSalva(p, fonte, SALVA, an.trecho(0.0, 0.55), an.trecho(0.55, 0.88))
         val comp = companheira(fonte)
         val b = if (comp == null) null else try {
-            ler(p, comp, condicional = false, SALVA_CANAIS, organizando = an.trecho(0.88, 0.97))
+            lerOuSalva(p, comp, SALVA_CANAIS, organizando = an.trecho(0.88, 0.97))
         } catch (_: IOException) {
             null   // sem canais.m3u (ou fora do ar): só a lista
         }
@@ -173,12 +173,60 @@ object Fonte {
         return r
     }
 
+    /**
+     * Ao abrir o app: com a cópia salva deste link, só pergunta ao servidor se mudou (ETag/Last-Modified). Sem mudança,
+     * o servidor responde 304 (quase nada de download) e a lista sai da cópia; igual ao app do PC. Antes o celular/TV
+     * baixava a lista inteira a cada abertura, o que gastava a cota do Firebase.
+     */
+    private fun lerOuSalva(
+        p: Pastas, origem: String, salvarComo: String,
+        baixando: (Double) -> Unit = {}, organizando: (Double) -> Unit = {},
+    ): Library {
+        val salva = File(p.dados, salvarComo)
+        val v = versao(p, origem, salvarComo)
+        if (isUrl(origem) && salva.exists() && (v.etag != null || v.lastModified != null || v.hash != null)) {
+            ler(p, origem, condicional = true, salvarComo, baixando, organizando)?.let { return it }
+            baixando(1.0)
+            return ler(salva, origem, organizando)
+        }
+        return ler(p, origem, condicional = false, salvarComo, baixando, organizando)!!
+    }
+
+    // A versão de cada link (ETag, Last-Modified e o hash do conteúdo) fica num arquivo ao lado da cópia salva, para
+    // valer também depois que o app fecha. Só vale para o mesmo link (trocou de lista: baixa tudo).
+    private fun versao(p: Pastas, origem: String, salvarComo: String): Versao = synchronized(versoes) {
+        versoes.getOrPut(origem) {
+            try {
+                val f = File(p.dados, "$salvarComo.versao")
+                val l = if (f.exists() && File(p.dados, salvarComo).exists()) f.readLines() else emptyList()
+                if (l.size >= 4 && l[0] == origem) Versao(l[1].ifEmpty { null }, l[2].ifEmpty { null }, l[3].ifEmpty { null }) else Versao()
+            } catch (_: IOException) {
+                Versao()
+            }
+        }
+    }
+
+    /** Só para os testes: esquece o que está na memória, como se o app tivesse fechado e aberto de novo. */
+    internal fun esquecerNaMemoria() {
+        synchronized(versoes) { versoes.clear() }
+        fonte = null
+        principal = null
+        canais = null
+    }
+
+    private fun guardarVersao(p: Pastas, origem: String, salvarComo: String, v: Versao) {
+        try {
+            File(p.dados, "$salvarComo.versao").writeText(listOf(origem, v.etag ?: "", v.lastModified ?: "", v.hash ?: "").joinToString("\n"))
+        } catch (_: IOException) {
+        }
+    }
+
     // Lê um arquivo (link ou content://). Com condicional, devolve null se não mudou desde a última vez.
     private fun ler(
         p: Pastas, origem: String, condicional: Boolean, salvarComo: String,
         baixando: (Double) -> Unit = {}, organizando: (Double) -> Unit = {},
     ): Library? {
-        val v = synchronized(versoes) { versoes.getOrPut(origem) { Versao() } }
+        val v = versao(p, origem, salvarComo)
         val tmp = File(p.cache, "$salvarComo.tmp")
         val hash: String
         if (isUrl(origem)) {
@@ -198,6 +246,7 @@ object Fonte {
         }
         if (condicional && hash == v.hash) {
             tmp.delete()
+            if (isUrl(origem)) guardarVersao(p, origem, salvarComo, v)   // mesmo conteúdo: só renova o ETag salvo
             return null
         }
         baixando(1.0)
@@ -205,6 +254,7 @@ object Fonte {
         v.hash = hash
         val salva = File(p.dados, salvarComo)
         if (!tmp.renameTo(salva)) { tmp.copyTo(salva, true); tmp.delete() }
+        if (isUrl(origem)) guardarVersao(p, origem, salvarComo, v)
         return lib
     }
 

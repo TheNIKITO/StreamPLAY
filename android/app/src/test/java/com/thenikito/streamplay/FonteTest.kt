@@ -126,6 +126,29 @@ class FonteTest {
     }
 
     @Test
+    fun aoAbrirDeNovoSoBaixaSeAListaMudou() = runBlocking {
+        val p = pastas()
+        val fonte = "$base/abrir/lista.m3u"
+        arquivos["/abrir/lista.m3u"] = lista
+        assertEquals(listOf("Canal A"), Fonte.carregar(p, fonte) {}.allChannels.map { it.name })
+        assertEquals(1, baixados["/abrir/lista.m3u"])
+
+        // app fechado e aberto de novo (nada na memória): pergunta ao servidor, recebe 304 e usa a cópia salva
+        Fonte.esquecerNaMemoria()
+        val andamento = mutableListOf<Float>()
+        val lib = Fonte.carregar(p, fonte) { andamento += it }
+        assertEquals(listOf("Canal A"), lib.allChannels.map { it.name })
+        assertEquals(1, baixados["/abrir/lista.m3u"])
+        assertEquals(1f, andamento.last())
+
+        // a lista mudou: na próxima abertura baixa de novo
+        arquivos["/abrir/lista.m3u"] = lista + "\n#EXTINF:-1 group-title=\"FILMES\",Outro\nhttp://v.com/outro.mp4\n"
+        Fonte.esquecerNaMemoria()
+        assertEquals(2, Fonte.carregar(p, fonte) {}.allMovies.size)
+        assertEquals(2, baixados["/abrir/lista.m3u"])
+    }
+
+    @Test
     fun listaSemCanaisAoLado() = runBlocking {
         val p = pastas()
         arquivos["/lista.m3u"] = lista

@@ -3,7 +3,8 @@
     "public": "public",
     "ignore": [
       "firebase.json",
-      "**/.*"
+      "**/.*",
+      "**/*.bak"
     ],
     "headers": [
       {
