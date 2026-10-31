@@ -37,15 +37,20 @@ Observação: qualquer pessoa com o link consegue baixar a lista.
 
 FERRAMENTAS
 -----------
-adicionar-episodios.bat: acrescenta episódios de séries sem mexer na lista
-  na mão. Abre o episodios-novos.txt no Bloco de Notas: coloque o nome da
-  série numa linha e, embaixo, um episódio por linha (S04E01 e o link na
-  frente). Pode ter várias séries no mesmo arquivo. Salve e feche o Bloco de
-  Notas. Ele acha a série na lista, usa o mesmo nome, capa e categoria dela e
-  coloca os episódios logo abaixo dos que ela já tem. Série que não existe:
-  pergunta a categoria. Episódio repetido é pulado (com outro link, pergunta
-  se troca). No fim oferece completar pelo TMDB e publicar. O que entrou fica
-  anotado em episodios-adicionados.txt.
+adicionar-episodios.bat: acrescenta episódios de séries e filmes sem mexer na
+  lista na mão. Abre o episodios-novos.txt no Bloco de Notas:
+  - SÉRIE: o nome da série numa linha e, embaixo, um episódio por linha
+    (S04E01 e o link na frente). Ele acha a série na lista, usa o mesmo nome,
+    capa e categoria dela e coloca os episódios logo abaixo dos que ela já tem.
+    Série que não existe: pergunta a categoria.
+  - FILMES: uma linha FILMES | Categoria (ex.: FILMES | Lançamentos) e, embaixo,
+    um filme por linha: o nome (com o ano, se souber) e o link na frente. O
+    filme entra junto dos outros daquela categoria. Só FILMES, sem categoria:
+    ele pergunta qual.
+  Pode misturar séries e filmes no mesmo arquivo. Salve e feche o Bloco de
+  Notas. Repetido com o mesmo link é pulado (com outro link, pergunta se troca).
+  No fim oferece completar pelo TMDB (descrição, capa e imagens) e publicar. O
+  que entrou fica anotado em episodios-adicionados.txt.
 
 completar-descricoes.bat: completa filmes e séries com descrição, ano, gênero,
   nota e imagem de fundo pelo TMDB (pede a sua chave da API do TMDB na primeira

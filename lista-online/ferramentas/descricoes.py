@@ -28,6 +28,7 @@ CACHE = os.path.join(PASTA, "tmdb-cache.json")
 NAO_ACHADOS = os.path.join(PASTA, "nao-encontrados.txt")
 BASE = os.environ.get("TMDB_BASE", "https://api.themoviedb.org/3")   # TMDB_BASE só para testes
 IMG = "https://image.tmdb.org/t/p/w1280"
+CAPA = "https://image.tmdb.org/t/p/w600_and_h900_bestv2"   # mesmo tamanho das capas que a lista já usa
 CAMPOS = ("descricao", "ano", "genero", "nota", "fundo")
 # outros nomes que o app também aceita: se a linha já tiver um deles, o campo não é acrescentado
 APELIDOS = {
@@ -167,6 +168,7 @@ class Tmdb:
             "genero": ", ".join(g["name"] for g in (d.get("genres") or [])[:3]),
             "nota": f"{nota:.1f}" if nota and (d.get("vote_count") or 0) > 0 else "",
             "fundo": IMG + d["backdrop_path"] if d.get("backdrop_path") else "",
+            "capa": CAPA + d["poster_path"] if d.get("poster_path") else "",
         }
 
 
@@ -184,6 +186,9 @@ def acrescentar(linha, dados):
     """Coloca na linha #EXTINF os campos que ela ainda não tem (logo depois do -1)."""
     attrs = {k.lower(): v for k, v in ATTR.findall(linha)}
     novos = [f'{k}="{valor_seguro(dados[k])}"' for k in CAMPOS if dados.get(k) and not tem_campo(attrs, k)]
+    # sem capa (filme ou série que entrou pelo adicionar-episodios): usa a do TMDB; quem já tem capa continua com a dela
+    if dados.get("capa") and not attrs.get("tvg-logo"):
+        novos.append(f'tvg-logo="{valor_seguro(dados["capa"])}"')
     if not novos:
         return linha, False
     m = re.match(r"(#EXTINF:\s*-?\d+(?:\.\d+)?)", linha, re.I)

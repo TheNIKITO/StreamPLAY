@@ -1,16 +1,20 @@
 """
-Acrescenta episódios de séries na lista do StreamPLAY a partir de um .txt simples (episodios-novos.txt):
+Acrescenta episódios de séries e filmes na lista do StreamPLAY a partir de um .txt simples (episodios-novos.txt):
 
     Nome da Série
     S04E01 http://link-do-episodio-1.mp4
     S04E02 http://link-do-episodio-2.mp4
 
-    Outra Série
-    S03E01 http://...
+    FILMES | Lançamentos
+    Nome do Filme (2024) http://link-do-filme.mp4
 
 - Uma linha sem link é o nome da série; as linhas "SxxEyy link" logo abaixo são os episódios dela.
+- Uma linha "FILMES" (ou "FILMES | Categoria") começa os filmes: embaixo, um por linha, o nome e o link na frente.
+  Sem a categoria (só "FILMES", ou um filme solto no começo do arquivo), pergunta em qual categoria colocar.
 - Se a série já existe na lista: usa o mesmo nome, capa e categoria dela e coloca os episódios logo abaixo dos que
   ela já tem (não fica misturado). Se não existe: pergunta a categoria e cria a série no fim da lista.
+- Filme entra junto dos outros filmes da categoria. Filme com o mesmo nome (e ano) que já existe: mesmo link é
+  pulado; com outro link, pergunta se troca o link.
 - Episódio que já existe com o mesmo link é pulado; com outro link, pergunta se troca o link.
 - Nunca apaga nada da lista. A lista antiga fica em lista.m3u.bak.
 
@@ -24,24 +28,38 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))   # o python roda
 import descricoes as d   # noqa: E402
 import episodios as ep   # noqa: E402
 
-TXT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(d.PASTA, "episodios-novos.txt")
-LISTA = sys.argv[2] if len(sys.argv) > 2 else d.LISTA
+SO_MODELO = "--modelo" in sys.argv   # só prepara o .txt (o .bat chama antes de abrir o Bloco de Notas)
+ARGS = [a for a in sys.argv[1:] if a != "--modelo"]
+TXT = ARGS[0] if ARGS else os.path.join(d.PASTA, "episodios-novos.txt")
+LISTA = ARGS[1] if len(ARGS) > 1 else d.LISTA
 FEITOS = os.path.join(os.path.dirname(TXT), "episodios-adicionados.txt")
 
 # "S04E01 link", "S4 E1 - link", "T04EP01 link", "4x01 link"
 LINHA_EP = re.compile(r'^(?:[ST]\s*(\d{1,2})\s*[._\-]?\s*E(?:P|PISODIO|PISÓDIO)?\s*[._\-]?\s*(\d{1,4})|(\d{1,2})\s*x\s*(\d{1,4}))(?![0-9])(.*)$', re.I)
 LINK = re.compile(r'(?:https?|rtmp|rtsp)://\S+', re.I)
-MODELO = """# EPISÓDIOS NOVOS PARA A LISTA DO STREAMPLAY
+# "FILMES", "FILMES | Lançamentos", "Filmes - Ação" (sem link): começa a parte dos filmes
+CABECALHO_FILMES = re.compile(r'^(?:filmes?|movies?)\s*(?:[|:\-–=>/]+\s*(.*))?$', re.I)
+MODELO = """# FILMES E EPISÓDIOS NOVOS PARA A LISTA DO STREAMPLAY
+# Escreva embaixo destas linhas de explicação. Pode misturar séries e filmes.
+# SÉRIE: o nome da série numa linha e, embaixo, um episódio por linha (S04E01 e o link na frente).
+# FILME: uma linha FILMES (ou FILMES | Lançamentos, para já dizer a categoria) e, embaixo,
+# um filme por linha: o nome (com o ano, se souber) e o link na frente.
+# Salve (Ctrl+S) e feche o Bloco de Notas para continuar.
+# Exemplo:      Nome da Série
+#               S04E01 http://link-do-episodio-1.mp4
+#               FILMES | Lançamentos
+#               Nome do Filme (2024) http://link-do-filme.mp4
+
+"""
+# o texto de explicação (deste modelo e dos anteriores) é ignorado nas linhas com # na frente; qualquer outra linha
+# vale, mesmo com # na frente
+EXPLICACAO = {l.strip("# ").strip() for l in (MODELO + """
+# EPISÓDIOS NOVOS PARA A LISTA DO STREAMPLAY
 # Escreva embaixo destas linhas de explicação. Na primeira linha, o nome da série;
 # embaixo dela, um episódio por linha: S04E01 e o link na frente. Pode colocar várias
 # séries, uma depois da outra. Salve (Ctrl+S) e feche o Bloco de Notas para continuar.
 # Exemplo:      Nome da Série
-#               S04E01 http://link-do-episodio-1.mp4
 #               S04E02 http://link-do-episodio-2.mp4
-
-"""
-# o texto de explicação (deste modelo e do anterior) é ignorado; qualquer outra linha vale, mesmo com # na frente
-EXPLICACAO = {l.strip("# ").strip() for l in (MODELO + """
 # Primeiro o nome da série numa linha; embaixo, um episódio por linha: S04E01 e o link na frente.
 # Pode colocar várias séries, uma depois da outra. Linhas que começam com # são ignoradas.
 # Salve (Ctrl+S) e feche o Bloco de Notas para continuar.
@@ -50,6 +68,7 @@ EXPLICACAO = {l.strip("# ").strip() for l in (MODELO + """
 #   S04E01 http://link-do-episodio-1.mp4
 #   S04E02 http://link-do-episodio-2.mp4
 """).splitlines()} | {"Exemplo:      Nome da Série", "Exemplo: Nome da Série"}
+EXPLICACAO.discard("")
 
 
 def perguntar(texto):
@@ -64,17 +83,33 @@ def sim(texto):
 
 
 def ler_txt():
-    """Devolve [(nome digitado, [(temporada, episódio, link)])] e a lista de linhas com problema."""
+    """Devolve [(nome digitado, [(temporada, episódio, link)])], [(categoria ou None, nome, link)] dos filmes e a lista
+    de linhas com problema."""
     with open(TXT, "rb") as f:
         bruto = f.read()
     try:
         texto = bruto.decode("utf-8-sig")
     except UnicodeDecodeError:
         texto = bruto.decode("cp1252")   # Bloco de Notas antigo (ANSI)
-    series, erros, atual = [], [], None
-    for n, l in enumerate(texto.splitlines(), 1):
-        l = l.strip().lstrip("#").strip()
-        if not l or l in EXPLICACAO:
+    series, filmes, erros, atual = [], [], [], None
+    filmes_cat = False   # dentro de um "FILMES": o valor é a categoria (None = perguntar)
+    for n, original in enumerate(texto.splitlines(), 1):
+        l = original.strip().lstrip("#").strip()
+        if not l or (original.lstrip().startswith("#") and l in EXPLICACAO):
+            continue
+        link = LINK.search(l)
+        cab = CABECALHO_FILMES.match(l) if not link else None
+        if cab:
+            sub = (cab.group(1) or "").strip()
+            filmes_cat, atual = (f"FILMES | {sub}" if sub else None), None
+            continue
+        if link and not LINHA_EP.match(l) and (filmes_cat is not False or atual is None):
+            # filme: o nome é o que vem antes do link
+            nome = re.sub(r"[\s\-–|:]+$", "", l[:link.start()]).strip()
+            if not nome:
+                erros.append(f"linha {n}: falta o nome do filme antes do link -> {l}")
+            else:
+                filmes.append((None if filmes_cat is False else filmes_cat, nome, link.group(0)))
             continue
         m = LINHA_EP.match(l)
         if m:
@@ -87,12 +122,12 @@ def ler_txt():
             else:
                 atual[1].append((int(s), int(e), link.group(0)))
             continue
-        if LINK.search(l):
+        if link:
             erros.append(f"linha {n}: falta o S01E01 antes do link -> {l}")
             continue
-        atual = (l, [])
+        atual, filmes_cat = (l, []), False
         series.append(atual)
-    return [s for s in series if s[1]], erros
+    return [s for s in series if s[1]], filmes, erros
 
 
 def nome_da_serie(linha):
@@ -142,6 +177,54 @@ def escolher_serie(digitado, series):
     return None
 
 
+# ---------- filmes ----------
+
+def chave_grupo(g):
+    """ "FILMES | Lançamentos" e "filmes - lancamentos" são a mesma categoria."""
+    return re.sub(r"[^a-z0-9]", "", d.norm(g))
+
+
+def mapa_filmes(linhas):
+    """Filmes da lista: título (sem ano e sem "dublado" etc.) -> [(índice do link, ano)]; e cada categoria de filmes
+    -> (nome como está na lista, índice da linha do link do último filme dela)."""
+    filmes, grupos = {}, {}
+    for i, l in enumerate(linhas):
+        if not l.startswith("#EXTINF"):
+            continue
+        attrs = {k.lower(): v for k, v in d.ATTR.findall(l)}
+        j = next((k for k in range(i + 1, min(i + 4, len(linhas))) if linhas[k].strip() and not linhas[k].startswith("#")), None)
+        g = attrs.get("group-title", "")
+        if j is None or d.tipo(g, linhas[j].strip()) != "filme":
+            continue
+        nome = (l.rsplit(",", 1)[-1].strip() if "," in l else "") or attrs.get("tvg-name", "")
+        titulo, ano = d.titulo_limpo(nome, "filme")
+        filmes.setdefault(d.norm(titulo), []).append((j, ano or attrs.get("ano") or attrs.get("year"), g))
+        grupos[chave_grupo(g)] = (g, j)
+    return filmes, grupos
+
+
+def escolher_categoria_filme(grupos, linhas):
+    contagem = {}
+    for l in linhas:
+        if l.startswith("#EXTINF"):
+            g = {k.lower(): v for k, v in d.ATTR.findall(l)}.get("group-title", "")
+            if d.tipo(g, "") == "filme":
+                contagem[g] = contagem.get(g, 0) + 1
+    ordem = sorted(contagem, key=lambda g: -contagem[g])
+    if not ordem:
+        return "FILMES"
+    for n, g in enumerate(ordem, 1):
+        print(f"    {n:2}) {g}")
+    while True:
+        r = perguntar("  Número da categoria: ")
+        if r.isdigit() and 1 <= int(r) <= len(ordem):
+            return ordem[int(r) - 1]
+
+
+def linha_filme(nome, grupo):
+    return f'#EXTINF:-1 tvg-name="{d.valor_seguro(nome)}" group-title="{grupo}",{nome}'
+
+
 def escolher_categoria(linhas):
     grupos = {}
     for l in linhas:
@@ -164,21 +247,34 @@ def linha_ep(nome, s, e, logo, grupo):
     return f'#EXTINF:-1 tvg-name="{d.valor_seguro(titulo)}"{logo} group-title="{grupo}",{titulo}'
 
 
+def preparar_modelo():
+    """Cria o .txt com a explicação; se ele só tem a explicação (de um modelo antigo), troca pela atual."""
+    if os.path.exists(TXT):
+        with open(TXT, encoding="utf-8-sig", errors="replace") as f:
+            linhas = [l.strip() for l in f.read().splitlines()]
+        if any(l and not (l.startswith("#") and l.lstrip("#").strip() in EXPLICACAO | {""}) for l in linhas):
+            return   # tem coisa escrita pela pessoa: não mexe
+    with open(TXT, "w", encoding="utf-8-sig") as f:
+        f.write(MODELO)
+
+
 def main():
+    if SO_MODELO:
+        return preparar_modelo()
     if not os.path.exists(TXT):
         with open(TXT, "w", encoding="utf-8-sig") as f:
             f.write(MODELO)
         raise SystemExit(f"  Criei o arquivo {os.path.basename(TXT)}: coloque os episódios nele e rode de novo.")
     if not os.path.exists(LISTA):
         raise SystemExit(f"  [ERRO] Não achei a lista: {LISTA}")
-    pedidos, erros = ler_txt()
+    pedidos, pedidos_filmes, erros = ler_txt()
     if erros:
         print("  Linhas que não entendi (ficam de fora):")
         for e in erros:
             print("    " + e)
         print()
-    if not pedidos:
-        raise SystemExit("  Nenhum episódio para adicionar no arquivo.")
+    if not pedidos and not pedidos_filmes:
+        raise SystemExit("  Nenhum episódio ou filme para adicionar no arquivo.")
 
     with open(LISTA, encoding="utf-8-sig", errors="replace", newline="") as f:
         linhas = f.read().split("\n")
@@ -217,23 +313,58 @@ def main():
             else:
                 depois.setdefault(series[k]["ultima"], []).extend(entram)
         resumo.append(f"  {nome}: {len(entram) // 2} episódio(s) novo(s)" + (f"  [{grupo}]" if grupo else ""))
+    total_eps = sum(len(v) for v in depois.values()) // 2 + len(no_fim) // 2
+
+    # filmes: cada um entra junto dos outros da categoria dele (categoria nova: no fim da lista)
+    filmes_novos = 0
+    if pedidos_filmes:
+        filmes, grupos = mapa_filmes(linhas)
+        sem_cat = None
+        unicos = {}
+        for cat, nome, link in pedidos_filmes:   # o mesmo filme duas vezes no .txt: vale o último
+            unicos[(cat, d.norm(nome))] = (cat, nome, link)
+        for cat, nome, link in unicos.values():
+            if cat is None:
+                if sem_cat is None:
+                    print("\n  Em qual categoria entram os filmes sem categoria (" + ", ".join(n for c, n, _ in unicos.values() if c is None)[:120] + ")?")
+                    sem_cat = escolher_categoria_filme(grupos, linhas)
+                cat = sem_cat
+            grupo, ultima = grupos.get(chave_grupo(cat), (cat, None))
+            titulo, ano = d.titulo_limpo(nome, "filme")
+            iguais_nome = [x for x in filmes.get(d.norm(titulo), []) if not (ano and x[1] and x[1] != ano)]
+            if iguais_nome:
+                if any(linhas[j].strip() == link for j, _, _ in iguais_nome):
+                    iguais += 1
+                else:
+                    j = next((x[0] for x in iguais_nome if chave_grupo(x[2]) == chave_grupo(grupo)), iguais_nome[0][0])
+                    trocar.append((j, link, f"Filme: {nome}"))
+                continue
+            entram = [linha_filme(nome, grupo) + fim, link + fim]
+            filmes_novos += 1
+            if ultima is None:
+                no_fim += entram
+            else:
+                depois.setdefault(ultima, []).extend(entram)
+            resumo.append(f"  Filme: {nome}  [{grupo}{'' if ultima is not None else ' (categoria nova)'}]")
 
     print()
     print("\n".join(resumo))
     if iguais:
-        print(f"  {iguais} episódio(s) já estavam na lista com o mesmo link (pulados).")
+        print(f"  {iguais} episódio(s)/filme(s) já estavam na lista com o mesmo link (pulados).")
     if trocar:
-        print(f"\n  {len(trocar)} episódio(s) já existem na lista com OUTRO link:")
+        print(f"\n  {len(trocar)} episódio(s)/filme(s) já existem na lista com OUTRO link:")
         for _, _, rotulo in trocar[:20]:
             print("    " + rotulo)
         if len(trocar) > 20:
             print(f"    ... e mais {len(trocar) - 20}")
         if not sim("  Trocar pelo link novo?"):
             trocar = []
-    total = sum(len(v) for v in depois.values()) // 2 + len(no_fim) // 2
+    total = total_eps + filmes_novos
     if not total and not trocar:
         raise SystemExit("\n  Nada novo para colocar na lista.")
-    if not sim(f"\n  Colocar {total} episódio(s)" + (f" e trocar {len(trocar)} link(s)" if trocar else "") + " na lista?"):
+    novos = " e ".join(x for x in (f"{total_eps} episódio(s)" if total_eps else "", f"{filmes_novos} filme(s)" if filmes_novos else "") if x)
+    acoes = " e ".join(x for x in (f"colocar {novos}" if novos else "", f"trocar {len(trocar)} link(s)" if trocar else "") if x)
+    if not sim(f"\n  {acoes[0].upper() + acoes[1:]} na lista?"):
         raise SystemExit("  Nada foi mudado.")
 
     for j, link, _ in trocar:
@@ -260,7 +391,7 @@ def main():
         f.write(feito.rstrip() + "\n\n")
     with open(TXT, "w", encoding="utf-8-sig") as f:
         f.write(MODELO)
-    print(f"\n  Pronto: {total} episódio(s) colocados na lista. A lista antiga ficou em lista.m3u.bak.")
+    print(f"\n  Pronto: {total_eps} episódio(s) e {filmes_novos} filme(s) colocados na lista. A lista antiga ficou em lista.m3u.bak.")
 
 
 if __name__ == "__main__":
