@@ -33,7 +33,9 @@ public partial class PlayerView : UserControl
     long _lastTime = -1;
     int _retries;
     DateTime _playingAt, _semAudio, _semVideo, _semImagem;   // desde quando cada problema está acontecendo
-    bool _vigiado, _simulado, _audioCorrigido, _videoCorrigido;
+    bool _vigiado, _simulado, _simuladoDepois, _videoCorrigido;
+    DateTime _religadoEm;   // guarda do som: quando religou a faixa de áudio pela última vez
+    int _religados;
     long _reabrirEm = -1;
     string _panel, _aspect = "original";
     RendererItem _cast;   // Chromecast para onde este player está mandando o vídeo (null = tocando aqui)
@@ -136,8 +138,9 @@ public partial class PlayerView : UserControl
         _cache = 0;
         _lastTime = -1;
         _startedAt = DateTime.Now;
-        _playingAt = _semAudio = _semVideo = _semImagem = default;
-        _vigiado = _audioCorrigido = _videoCorrigido = false;
+        _playingAt = _semAudio = _semVideo = _semImagem = _religadoEm = default;
+        _vigiado = _videoCorrigido = _simuladoDepois = false;
+        _religados = 0;
         _errosDeSom = 0;
         _reclamacoes.Clear();
         _simulado = _reabrirEm >= 0;   // na reabertura da vigia, não provoca o defeito de novo
@@ -300,7 +303,7 @@ public partial class PlayerView : UserControl
         var st = _mp.State;
         long len = _mp.Length, t = _mp.Time;
 
-        if (st == VLCState.Playing) { ApplyVolume(); Vigiar(now, t); }
+        if (st == VLCState.Playing) { ApplyVolume(); Vigiar(now, t); GuardarSom(now, t); }
         if (_req.IsLive && (now - _guiaEm).TotalSeconds >= 15) AtualizarGuia();
         if ((now - _discordEm).TotalSeconds >= 2) AtualizarDiscord();
         if (st == VLCState.Playing && t > 0 && _lastTime >= 0 && t != _lastTime) _cache = 100;
@@ -407,12 +410,46 @@ public partial class PlayerView : UserControl
 
     // ---------- Vigia dos primeiros segundos ----------
     // Alguns arquivos abrem sem faixa de áudio escolhida, ou com o vídeo sem aparecer (tela preta com som).
-    // Nos primeiros segundos o player confere e corrige: escolhe o áudio (de preferência em português) e, se o
-    // vídeo não aparecer, reabre no mesmo ponto sem aceleração de vídeo — e lembra disso para esse link.
+    // Nos primeiros segundos o player confere e corrige: se o vídeo não aparecer, reabre no mesmo ponto sem aceleração
+    // de vídeo — e lembra disso para esse link. O som é vigiado o vídeo inteiro (GuardarSom).
 
     static readonly HashSet<string> SemAceleracao = new(StringComparer.OrdinalIgnoreCase);
-    // STREAMPLAY_TESTE_DEFEITO=audio|video|vout só existe para testes: provoca o defeito para ver a vigia corrigir
+    // STREAMPLAY_TESTE_DEFEITO=audio|audio-depois|video|vout só existe para testes: provoca o defeito para ver a vigia
+    // corrigir (audio-depois: desliga o som aos 20 s de vídeo, como acontece ao trocar de janela ou de monitor)
     static readonly string Defeito = Environment.GetEnvironmentVariable("STREAMPLAY_TESTE_DEFEITO");
+
+    // Guarda do som, o vídeo inteiro (antes só nos primeiros 12 s): às vezes o VLC desliga a faixa de áudio sozinho
+    // (ao trocar de janela ou de monitor, depois de travar, ao pular) e no menu ela aparece desmarcada, mesmo com uma
+    // faixa só. Desligada por 3 s seguidos (6 s em .m3u8, que troca de qualidade e some com a faixa por um instante),
+    // religa a faixa; no máximo a cada 15 s e 5 vezes por vídeo (se o VLC insiste em desligar, é outro problema).
+    void GuardarSom(DateTime now, long t)
+    {
+        if (_playingAt == default || Transmitindo || _religados >= 5) return;
+        double s = (now - _playingAt).TotalSeconds;
+        try
+        {
+            if (Defeito == "audio-depois" && !_simuladoDepois && t > 20000)
+            {
+                _simuladoDepois = true;
+                _mp.SetAudioTrack(-1);
+                App.Log($"Teste: som desligado aos {t / 1000} s (áudio {_mp.AudioTrack}/{_mp.AudioTrackCount}).");
+            }
+            // só depois que o vídeo começou a andar: antes disso o VLC ainda carrega os decodificadores e a faixa aparece "nenhuma"
+            bool desligado = (t > 1500 || s > 12) && _mp.AudioTrack == -1 && _mp.AudioTrackCount > 0;
+            if (!desligado) { _semAudio = default; return; }
+            if (_semAudio == default) _semAudio = now;
+            bool adaptativo = _req.Url.Split('?')[0].EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase);
+            if ((now - _semAudio).TotalSeconds < (adaptativo ? 6 : 3) || (now - _religadoEm).TotalSeconds < 15 || MelhorAudio() is not int a) return;
+            _mp.SetAudioTrack(a);
+            _religados++;
+            _religadoEm = now;
+            _semAudio = default;
+            var nome = _req.Title + (_req.Episode != null ? $" {_req.Episode.Label}" : "");
+            App.Log($"Vigia do player: o som desligou sozinho em \"{nome}\" ({TimeSpan.FromMilliseconds(Math.Max(0, t)):h\\:mm\\:ss}); religuei a faixa {a}"
+                    + $" ({_religados}ª vez neste vídeo).\n" + InfoDoAudio());
+        }
+        catch (Exception ex) { App.Log(ex); }
+    }
 
     void SimularDefeito()
     {
@@ -449,14 +486,6 @@ public partial class PlayerView : UserControl
         try
         {
             if (_mp.Mute) _mp.Mute = false;
-            if (!_audioCorrigido && Durou(andando && _mp.AudioTrack == -1 && _mp.AudioTrackCount > 0, ref _semAudio, now) && MelhorAudio() is int a)
-            {
-                _audioCorrigido = true;
-                _mp.SetAudioTrack(a);
-                App.Log($"Vigia do player: abriu sem faixa de áudio; escolhi a faixa {a}. {_req.Url}");
-                return;
-            }
-
             if (_mp.VideoTrackCount > 0)
             {
                 if (!_videoCorrigido && Durou(andando && _mp.VideoTrack == -1, ref _semVideo, now))

@@ -1,0 +1,16 @@
+﻿# AJUSTE DE TEMPORADAS (para o completar-episodios)
+# Algumas séries têm as temporadas numeradas de um jeito no TMDB e de outro na lista
+# (ex.: o TMDB junta as Partes 1 e 2 de Lupin numa temporada só). Aqui você diz qual
+# temporada do TMDB corresponde a cada temporada da sua lista. O nome na lista NÃO muda
+# (continua S02, S03...): só o título, a descrição e a imagem vêm da temporada certa.
+#
+# Escreva o nome da série e, embaixo, uma linha por temporada da lista, como em Lupin.
+# "a partir do 6" = o episódio 1 dessa temporada é o episódio 6 no TMDB.
+# Temporada que não aparece aqui continua com o mesmo número.
+# O temporadas-diferentes.txt mostra as séries que não batem, já com a sugestão.
+
+Lupin
+S01 = T1
+S02 = T1 a partir do 6
+S03 = T2
+S04 = T3

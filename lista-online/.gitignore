@@ -9,3 +9,10 @@ links-quebrados.html
 *-sem-quebrados.m3u
 tmdb-episodios-cache.json
 episodios-nao-encontrados.txt
+cloudflare/node_modules/
+cloudflare/.wrangler/
+cloudflare/.publicado
+*.bak
+episodios-novos.txt
+episodios-adicionados.txt
+temporadas-diferentes.txt

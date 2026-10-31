@@ -1,0 +1,9 @@
+# Servidor da lista do StreamPLAY no Cloudflare (R2 + Worker, download grátis). Publicar: publicar-lista.bat
+name = "streamplay-lista"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+workers_dev = true
+
+[[r2_buckets]]
+binding = "LISTA"
+bucket_name = "streamplay-lista"

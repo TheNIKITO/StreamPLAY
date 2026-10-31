@@ -50,6 +50,9 @@ object Estado {
     /** Muda quando a aba deve voltar ao começo (saiu de um título aberto pela busca): a página fecha o "ver tudo". */
     var voltarAoInicio by mutableIntStateOf(0)
     var aviso by mutableStateOf<Aviso?>(null)
+    /** Novidades do PLAYGER para a janela de novidades (vazia = fechada). */
+    var novidades by mutableStateOf<List<Novidades.Novidade>>(emptyList())
+    private var novidadesConferidas = false
     var contaAtual by mutableStateOf<Conta.Resultado?>(null)
 
     /** Avisos do sino (texto, quando), o mais novo primeiro; avisosNovos acende a bolinha vermelha. */
@@ -114,6 +117,10 @@ object Estado {
         app = ctx.applicationContext
         tab = Store.tab
         Conta.definirAparelho(com.thenikito.streamplay.ui.ehTv(ctx), android.os.Build.MANUFACTURER, android.os.Build.MODEL)
+        // teste grátis: um teste por aparelho (o servidor só recebe o hash)
+        @android.annotation.SuppressLint("HardwareIds")
+        val androidId = try { android.provider.Settings.Secure.getString(ctx.contentResolver, android.provider.Settings.Secure.ANDROID_ID) } catch (_: Exception) { null }
+        Conta.definirIdForte(androidId, Store.meuAparelho())
         ultimaConta = agora
         ultimaLista = agora
         ultimaAtualizacao = agora
@@ -185,7 +192,9 @@ object Estado {
     suspend fun periodico() {
         if (!iniciado) return
         atualizarOnline()
-        if (agora - ultimaConta >= CONTA_CADA) conferirConta()
+        // teste grátis: confere a conta logo que o teste acaba (a conferência normal é só a cada 15 min)
+        val fimTeste = contaAtual?.acesso?.teste?.fim
+        if (agora - ultimaConta >= CONTA_CADA || (fimTeste != null && agora >= fimTeste + 5000 && agora - ultimaConta > 30_000)) conferirConta()
         if (agora - ultimaLista >= LISTA_CADA) conferirLista()
         if (agora - ultimoGuia >= GUIA_CADA) carregarGuia()
         if (agora - ultimaAtualizacao >= ATUALIZA_CADA) procurarAtualizacao(manual = false)
@@ -205,6 +214,7 @@ object Estado {
             Store.save()
             definirLista(nova)
             if (quiet) { toast("Lista atualizada  •  " + nova.summary); avisar("Lista atualizada  •  " + nova.summary) }
+            else mostrarNovidades()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
@@ -221,6 +231,22 @@ object Estado {
         } finally {
             carregandoLista = false
             ultimaLista = agora
+        }
+    }
+
+    // Novidades do PLAYGER: na abertura, já na tela da lista, mostra numa janela cada novidade nova (uma vez só).
+    // Se não der para mostrar agora (tela de login, player, outra janela aberta), fica para a próxima abertura.
+    private fun mostrarNovidades() {
+        if (novidadesConferidas) return
+        novidadesConferidas = true
+        scope.launch {
+            val l = try { Novidades.novas() } catch (_: Exception) { return@launch }   // sem internet: na próxima abertura
+            if (l.isEmpty()) return@launch
+            delay(1600)   // deixa a abertura sumir e a lista aparecer primeiro
+            if (tela != Tela.Principal || player != null || detalhes != null || ajustes) { novidadesConferidas = false; return@launch }
+            Novidades.marcarVistas(l)
+            for (n in l.reversed()) avisar("Novidade: ${n.titulo}")
+            novidades = l
         }
     }
 

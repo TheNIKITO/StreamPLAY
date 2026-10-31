@@ -72,6 +72,9 @@ class PlayerControle(primeiro: PlayRequest, private val app: Context) {
     private var playingAt = 0L
     private var vigiaEspera = 0L
     private var vigiado = false
+    private var semAudioDesde = 0L   // guarda do som: desde quando a faixa de áudio está desligada
+    private var religadoEm = 0L
+    private var religados = 0
     private var simulado = false
     private var reabrirEm = -1L
     private var vouts = 0
@@ -135,6 +138,9 @@ class PlayerControle(primeiro: PlayRequest, private val app: Context) {
         playingAt = 0
         vigiaEspera = 0
         vigiado = false
+        semAudioDesde = 0
+        religadoEm = 0
+        religados = 0
         vouts = 0
         simulado = reabrirEm >= 0
         retomar = null
@@ -268,7 +274,7 @@ class PlayerControle(primeiro: PlayRequest, private val app: Context) {
         val t = mp.time
         val playing = st == 3
 
-        if (playing) vigiar(now, t)
+        if (playing) { vigiar(now, t); guardarSom(now, t) }
         if (playing && t > 0 && lastTime >= 0 && t != lastTime) cache = 100f
         lastTime = t
         if (playing && now - startedAt > 20_000) retries = 0
@@ -299,9 +305,32 @@ class PlayerControle(primeiro: PlayRequest, private val app: Context) {
     }
 
     // ---------- Vigia dos primeiros segundos ----------
-    // Alguns arquivos abrem sem faixa de áudio escolhida, ou com o vídeo sem aparecer (tela preta com som).
-    // Nos primeiros segundos o player confere e corrige: escolhe o áudio (de preferência em português) e, se o
-    // vídeo não aparecer, reabre no mesmo ponto sem aceleração de vídeo — e lembra disso para esse link.
+    // Alguns arquivos abrem com o vídeo sem aparecer (tela preta com som) ou sem a faixa de vídeo escolhida.
+    // Nos primeiros segundos o player confere e corrige: se o vídeo não aparecer, reabre no mesmo ponto sem aceleração
+    // de vídeo — e lembra disso para esse link. O som é vigiado o vídeo inteiro (guardarSom), como no PC.
+
+    // ---------- Guarda do som (o vídeo inteiro) ----------
+    // Às vezes o VLC desliga a faixa de áudio sozinho (depois de travar, ao pular, ao trocar a saída de som) e no menu
+    // ela aparece desmarcada, mesmo com uma faixa só. Desligada por 3 s seguidos (6 s em .m3u8, que troca de qualidade
+    // e some com a faixa por um instante), religa; no máximo a cada 15 s e 5 vezes por vídeo.
+    private fun guardarSom(now: Long, t: Long) {
+        val mp = mp ?: return
+        if (playingAt == 0L || transmitindo || religados >= 5) return
+        try {
+            val s = (now - playingAt) / 1000.0
+            val desligado = (t > 1500 || s > 12) && mp.audioTrack == -1 && mp.audioTracksCount > 0
+            if (!desligado) { semAudioDesde = 0; return }
+            if (semAudioDesde == 0L) semAudioDesde = now
+            val adaptativo = (req.url ?: "").substringBefore('?').endsWith(".m3u8", ignoreCase = true)
+            if (now - semAudioDesde < (if (adaptativo) 6000 else 3000) || (religadoEm != 0L && now - religadoEm < 15_000)) return
+            val a = melhorAudio() ?: return
+            mp.setAudioTrack(a)
+            religados++
+            religadoEm = now
+            semAudioDesde = 0
+        } catch (_: Exception) {
+        }
+    }
 
     private fun vigiar(now: Long, t: Long) {
         val mp = mp ?: return
@@ -313,15 +342,6 @@ class PlayerControle(primeiro: PlayRequest, private val app: Context) {
         // só mexe nas faixas depois que o vídeo começou a andar (antes disso elas ainda podem estar carregando)
         val andando = t > 1500 || s > 12
         try {
-            if (andando && mp.audioTrack == -1 && mp.audioTracksCount > 0) {
-                val a = melhorAudio()
-                if (a != null) {
-                    mp.setAudioTrack(a)
-                    vigiaEspera = now + 3000
-                    vigiado = false
-                    return
-                }
-            }
             if (mp.videoTracksCount > 0) {
                 if (mp.videoTrack == -1) {
                     val v = if (andando) mp.videoTracks?.firstOrNull { it.id != -1 } else null

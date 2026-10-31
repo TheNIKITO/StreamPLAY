@@ -27,6 +27,8 @@ object Store {
     val favorites = ArrayList<String>()
     val progress = HashMap<String, Progresso>()
     val recent = ArrayList<String>()
+    /** Novidades do PLAYGER que já apareceram na janela deste aparelho (cada uma aparece uma vez). */
+    val novidadesVistas = ArrayList<String>()
     val favLog = HashMap<String, FavMarca>()
     /** "Limpar continuar assistindo" (ms UTC): progresso mais antigo que isto não volta da nuvem. */
     var progressoLimpo = 0L
@@ -65,6 +67,7 @@ object Store {
         listaSalva = j.optString("listaSalva").ifEmpty { null }
         lista(j.optJSONArray("favorites"), favorites)
         lista(j.optJSONArray("recent"), recent)
+        lista(j.optJSONArray("novidadesVistas"), novidadesVistas)
         progressoLimpo = j.optLong("progressoLimpo", 0)
         j.optJSONObject("favLog")?.let { fl -> for (k in fl.keys()) fl.optJSONObject(k)?.let { favLog[k] = FavMarca(it.optBoolean("on"), it.optLong("at")) } }
         val p = j.optJSONObject("progress")
@@ -105,6 +108,7 @@ object Store {
         put("listaSalva", listaSalva ?: "")
         put("favorites", JSONArray(favorites))
         put("recent", JSONArray(recent))
+        put("novidadesVistas", JSONArray(novidadesVistas))
         put("progressoLimpo", progressoLimpo)
         val fl = JSONObject()
         for ((k, v) in favLog) fl.put(k, JSONObject().put("on", v.on).put("at", v.at))

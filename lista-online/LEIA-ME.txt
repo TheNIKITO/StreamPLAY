@@ -1,5 +1,5 @@
-LISTA ONLINE DO STREAMPLAY (Firebase Hosting, plano grátis)
-============================================================
+LISTA ONLINE DO STREAMPLAY (Cloudflare R2, plano grátis)
+=========================================================
 
 1) Edite a lista: dois cliques em editar-lista.bat (abre public\lista.m3u no Bloco de Notas).
    Salve com Ctrl+S.
@@ -15,32 +15,38 @@ LISTA ONLINE DO STREAMPLAY (Firebase Hosting, plano grátis)
    arquivo dos canais, não a lista inteira de novo.
 
 2) Publique: dois cliques em publicar-lista.bat (publica a lista e os canais).
-   Na PRIMEIRA vez ele:
-     - instala o Firebase CLI (precisa do Node.js, que você já tem);
-     - abre o navegador para você entrar com sua conta Google;
-     - pede um nome de projeto (vira o link: https://NOME.web.app/lista.m3u).
-       Só letras minúsculas, números e hífen; aperte Enter para usar a sugestão
-       e cria um projeto separado do ScreenPLAY só para a lista.
-   Nas próximas vezes é só dois cliques: publica em poucos segundos.
+   Ele comprime a lista e envia para o Cloudflare (mesma conta do servidor do
+   Pix). Na PRIMEIRA vez instala as ferramentas do Cloudflare e, se precisar,
+   abre o navegador para você entrar na conta.
+   Link: https://streamplay-lista.streamplay-pix.workers.dev/lista.m3u
 
-3) No StreamPLAY (só na primeira vez): Configurações > Trocar lista >
-   cole o link (o publicar-lista.bat já deixa ele copiado).
-   Depois disso, os apps abertos conferem a lista sozinhos a cada 10 minutos
-   e quando você volta para o app. Só baixam de novo se a lista mudou.
+3) O link fica no PLAYGER: Configurações > Lista do StreamPLAY. Os apps pegam
+   de lá depois do login. Os apps abertos conferem a lista sozinhos a cada
+   10 minutos e quando você volta para o app. Só baixam de novo se a lista mudou.
 
-Custos: os vídeos NÃO passam pelo Firebase (o VLC busca direto do link de cada
-vídeo). O Firebase só entrega o arquivo de texto da lista: o grátis (360 MB/dia)
-sobra. Evite colocar as capas aqui; use links de imagens hospedadas fora.
+Custos: os vídeos NÃO passam pelo Cloudflare (o VLC busca direto do link de cada
+vídeo). O Cloudflare só entrega o arquivo da lista, e no R2 o download é grátis
+e sem limite. O plano grátis aguenta 100 mil conferências por dia (cada app
+aberto confere 2 arquivos a cada 10 minutos). Evite colocar as capas aqui; use
+links de imagens hospedadas fora.
 
-Se a criação do projeto falhar (ex.: o Google pede para aceitar os termos):
-crie o projeto em https://console.firebase.google.com com o mesmo nome, rode o
-publicar-lista.bat de novo, digite o nome e responda S em "o projeto já é seu".
-Para trocar de projeto depois, apague o arquivo projeto.txt.
+O publicar-lista-firebase.bat é o jeito antigo (Firebase Hosting, 10 GB por mês
+de download). Só use se quiser voltar para o Firebase.
 
 Observação: qualquer pessoa com o link consegue baixar a lista.
 
 FERRAMENTAS
 -----------
+adicionar-episodios.bat: acrescenta episódios de séries sem mexer na lista
+  na mão. Abre o episodios-novos.txt no Bloco de Notas: coloque o nome da
+  série numa linha e, embaixo, um episódio por linha (S04E01 e o link na
+  frente). Pode ter várias séries no mesmo arquivo. Salve e feche o Bloco de
+  Notas. Ele acha a série na lista, usa o mesmo nome, capa e categoria dela e
+  coloca os episódios logo abaixo dos que ela já tem. Série que não existe:
+  pergunta a categoria. Episódio repetido é pulado (com outro link, pergunta
+  se troca). No fim oferece completar pelo TMDB e publicar. O que entrou fica
+  anotado em episodios-adicionados.txt.
+
 completar-descricoes.bat: completa filmes e séries com descrição, ano, gênero,
   nota e imagem de fundo pelo TMDB (pede a sua chave da API do TMDB na primeira
   vez). Não apaga o que você já escreveu. Depois rode o publicar-lista.bat.
@@ -51,6 +57,13 @@ completar-episodios.bat: completa cada episódio das séries com o nome, a
   cliente parou. Na primeira vez demora mais (busca cada temporada); depois só
   busca o que for novo. O que não achar fica em episodios-nao-encontrados.txt.
   Não apaga o que você já escreveu. Depois rode o publicar-lista.bat.
+
+  Temporadas numeradas diferente do TMDB (ex.: Lupin, onde o TMDB junta as
+  Partes 1 e 2 numa temporada só): no fim ele gera temporadas-diferentes.txt
+  com as séries que não batem e, quando dá, a sugestão pronta. Copie a
+  sugestão para o ajuste-temporadas.txt e rode de novo: ele refaz o nome, a
+  descrição e a imagem só dessas séries, pegando a temporada certa do TMDB.
+  O nome na lista (S02E01...) não muda, então ninguém perde onde parou.
 
 verificar-links.bat: testa os links da lista e dos canais e abre um relatório
   (links-quebrados.html) com o que não funciona. Testa 20 links ao mesmo

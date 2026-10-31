@@ -132,6 +132,7 @@ public partial class MainWindow : Window
             SetLibrary(lib);
             Watch();
             if (quiet) { Toast("Lista atualizada  •  " + lib.Summary); Avisar("Lista atualizada  •  " + lib.Summary); }
+            else _ = MostrarNovidades();
         }
         catch (Exception ex)
         {
@@ -139,6 +140,24 @@ public partial class MainWindow : Window
             else ShowSetup("Não foi possível abrir a lista: " + ex.Message);
         }
         EndSplash();
+    }
+
+    // Novidades do PLAYGER: na abertura, já na tela da lista, mostra num popup cada novidade nova (uma vez só).
+    // Se não der para mostrar agora (tela de login, player, outra janela aberta), fica para a próxima abertura.
+    bool _novidadesConferidas;
+    async Task MostrarNovidades()
+    {
+        if (_novidadesConferidas) return;
+        _novidadesConferidas = true;
+        List<Novidades.Novidade> l;
+        try { l = await Novidades.NovasAsync(); }
+        catch (Exception) { return; }   // sem internet ou o servidor não respondeu: tenta na próxima abertura
+        if (l.Count == 0) return;
+        await Task.Delay(1600);   // deixa a abertura sumir e a lista aparecer primeiro
+        if (NaTelaDeConta || _player != null || OverlayOpen || Lib == null) { _novidadesConferidas = false; return; }
+        Novidades.MarcarVistas(l);
+        foreach (var n in Enumerable.Reverse(l)) Avisar("Novidade: " + n.Titulo);
+        ShowOverlay(new NovidadesView(l));
     }
 
     void SetLibrary(Library lib)
@@ -281,8 +300,22 @@ public partial class MainWindow : Window
         Store.Save();
         _ultimaConta = DateTime.Now;
         _contaTimer.Start();
+        AgendarFimDoTeste(r);
         Online(Store.D.AcessoId);
         return mudou;
+    }
+
+    // teste grátis: confere a conta na hora em que o teste acaba (a conferência normal é só a cada 15 min)
+    DispatcherTimer _fimTeste;
+    void AgendarFimDoTeste(Conta.Resultado r)
+    {
+        _fimTeste?.Stop();
+        if (r.Acesso?.Teste is not { Fim: { } fim }) return;
+        var falta = fim - DateTimeOffset.Now + TimeSpan.FromSeconds(5);
+        if (falta <= TimeSpan.Zero || falta > TimeSpan.FromDays(20)) return;
+        _fimTeste = new DispatcherTimer { Interval = falta };
+        _fimTeste.Tick += async (_, _) => { _fimTeste.Stop(); await ConferirConta(); };
+        _fimTeste.Start();
     }
 
     /// <summary>A lista é a que o painel manda com o login (o botão "Trocar lista" some).</summary>

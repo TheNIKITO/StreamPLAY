@@ -47,7 +47,15 @@ object Conta {
         val lista: String? = null,
         /** Servidor do Pix automático (vazio = desligado no painel). */
         val pixUrl: String? = null,
+        /** Cadastro pelo site com teste grátis (null = cliente normal). */
+        var teste: Teste? = null,
     )
+
+    /**
+     * Teste grátis (cadastro pelo site): [fim] em ms (null = ainda não começou: começa ao abrir o app);
+     * [cortado] = o aparelho já tinha sido usado no teste de outra conta; [url] = servidor do PLAYGER que inicia o teste.
+     */
+    data class Teste(val horas: Double, val fim: Long?, val cortado: Boolean, val bloq: Boolean, val url: String?)
 
     /** Pix automático: o QR Code (PNG em base64) e o "copia e cola" do que o cliente deve. */
     class Pix(val pendente: Boolean, val valor: Double, val faturas: Int, val copia: String?, val qr: String?)
@@ -102,7 +110,8 @@ object Conta {
             )
         }
         try {
-            val hoje = if (c.date > 0) Dia.de(c.date) else Dia.hoje()
+            val agora = if (c.date > 0) c.date else System.currentTimeMillis()
+            val hoje = Dia.de(agora)
             if (codigo == 404)
                 return@withContext Resultado(Estado.Invalido, "Login ou senha incorretos", "Confira o login e a senha que você recebeu.", null, hoje)
             if (codigo !in 200..299)
@@ -111,13 +120,58 @@ object Conta {
                     "O servidor não respondeu direito (erro $codigo). Tente de novo daqui a pouco.", null, hoje,
                 )
             val r = try {
-                avaliar(ler(c.inputStream.bufferedReader().use { it.readText() }), hoje)
+                val a = ler(c.inputStream.bufferedReader().use { it.readText() })
+                iniciarTeste(id, a, agora)
+                avaliar(a, hoje, agora)
             } catch (_: Exception) {
                 return@withContext Resultado(Estado.SemConexao, "Resposta inválida", "Não entendi a resposta do servidor. Tente de novo daqui a pouco.", null, hoje)
             }
             if (r.estado == Estado.Liberado) conferirAparelhos(id, r) else r
         } finally {
             c.disconnect()
+        }
+    }
+
+    // ---------- teste grátis (cadastro pelo site; igual ao Conta.cs do PC) ----------
+    // Enquanto o teste não acabou, o app avisa o servidor do PLAYGER a cada conferência: na primeira vez o teste
+    // começa (as horas contam a partir daí) e o aparelho fica marcado com esta conta. Se este aparelho já foi usado
+    // no teste de outra conta, o servidor encerra o teste na hora. O servidor só recebe um hash do ID do aparelho.
+
+    /** Hash do ID forte deste aparelho (definido ao abrir o app; veja [definirIdForte]). */
+    var idForte: String? = null
+
+    /**
+     * ANDROID_ID: não muda ao desinstalar e instalar de novo (o APK sai sempre com a mesma assinatura); só muda
+     * restaurando de fábrica. IDs vazios ou de fábrica repetidos caem no código desta instalação do app.
+     */
+    fun definirIdForte(androidId: String?, doApp: String) {
+        val a = androidId?.trim()?.lowercase(Locale.ROOT)
+        val bruto = if (a != null && a.length >= 8 && a != "9774d56d682e549c" && a.any { it != '0' }) "android:$a" else "app:$doApp"
+        idForte = MessageDigest.getInstance("SHA-256").digest("streamplay-aparelho|$bruto".toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+    }
+
+    private fun iniciarTeste(id: String, a: Acesso, agora: Long) {
+        val t = a.teste ?: return
+        val aparelho = idForte ?: return
+        if (t.bloq || !a.ativo || t.url.isNullOrBlank() || (t.fim != null && t.fim <= agora)) return
+        try {
+            val c = URL(t.url.trimEnd('/') + "/teste").openConnection() as HttpURLConnection
+            try {
+                c.connectTimeout = 15000
+                c.readTimeout = 20000
+                c.requestMethod = "POST"
+                c.doOutput = true
+                c.setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                c.outputStream.use { it.write(JSONObject().put("acesso", id).put("aparelho", aparelho).put("nome", nomeAparelho).toString().toByteArray(Charsets.UTF_8)) }
+                if (c.responseCode !in 200..299) return
+                val j = JSONObject(c.inputStream.bufferedReader().use { it.readText() })
+                if (!j.optBoolean("teste")) return
+                a.teste = t.copy(fim = if (j.isNull("fim")) null else j.optLong("fim"), cortado = j.optBoolean("cortado"))
+            } finally {
+                c.disconnect()
+            }
+        } catch (_: Exception) {
         }
     }
 
@@ -145,7 +199,7 @@ object Conta {
         nomeAparelho = ((if (tv) "TV" else "Celular") + if (nome.isNotBlank()) " – $nome" else "").take(80)
     }
 
-    class Aparelho(val id: String, val nome: String, val visto: Long)
+    class Aparelho(val id: String, val nome: String, val visto: Long, val hw: String? = null)
 
     private fun conferirAparelhos(id: String, r: Resultado): Resultado {
         if (aparelhosOk == id && System.currentTimeMillis() - aparelhosEm < CONFERIR_CADA) return r
@@ -179,7 +233,7 @@ object Conta {
                     r.acesso, r.hoje, aparelhos = true,
                 )
             }
-            if (meu == null || agora - meu.visto > RENOVAR_CADA || meu.nome != nomeAparelho)
+            if (meu == null || agora - meu.visto > RENOVAR_CADA || meu.nome != nomeAparelho || (idForte != null && meu.hw != idForte))
                 if (!registrar(id, eu)) return r   // não conseguiu anotar: confere de novo na próxima
             aparelhosOk = id
             aparelhosEm = System.currentTimeMillis()
@@ -190,13 +244,17 @@ object Conta {
 
     // Grava o registro deste aparelho com a hora do servidor (as regras do Firestore só aceitam assim).
     // soSeExiste: só renova um registro que já existe (o sinal de online não recria um aparelho removido no painel).
-    // comOnline = false: sem o campo "online" (regras antigas do PLAYGER recusam o campo com 403; aí grava como antes).
+    // comOnline = false: sem os campos "online" e "hw" (regras antigas do PLAYGER recusam com 403; aí grava como antes).
+    // hw = hash do ID forte do aparelho: o teste grátis de outra conta neste aparelho é cortado (veja definirIdForte).
     private fun registrar(id: String, eu: String, online: Boolean = true, soSeExiste: Boolean = false, comOnline: Boolean = true): Boolean {
         val raiz = base.trimEnd('/').substringBeforeLast('/')   // .../documents
         val campos = JSONObject()
             .put("nome", JSONObject().put("stringValue", nomeAparelho))
             .put("tipo", JSONObject().put("stringValue", tipoAparelho))
-        if (comOnline) campos.put("online", JSONObject().put("booleanValue", online))
+        if (comOnline) {
+            campos.put("online", JSONObject().put("booleanValue", online))
+            idForte?.let { campos.put("hw", JSONObject().put("stringValue", it)) }
+        }
         val escrita = JSONObject()
             .put("update", JSONObject().put("name", "projects/$PROJETO/databases/(default)/documents/acessos/$id/aparelhos/$eu").put("fields", campos))
             .put("updateTransforms", JSONArray().put(JSONObject().put("fieldPath", "visto").put("setToServerValue", "REQUEST_TIME")))
@@ -236,7 +294,7 @@ object Conta {
             val d = docs.getJSONObject(i)
             val f = d.optJSONObject("fields") ?: continue
             val visto = f.optJSONObject("visto")?.optString("timestampValue")?.let { instante(it) } ?: 0L
-            l.add(Aparelho(d.getString("name").substringAfterLast('/'), texto(f, "nome") ?: "Aparelho", visto))
+            l.add(Aparelho(d.getString("name").substringAfterLast('/'), texto(f, "nome") ?: "Aparelho", visto, texto(f, "hw")))
         }
         return l
     }
@@ -254,11 +312,23 @@ object Conta {
         return c.timeInMillis + ms
     }
 
-    /** Mesma regra do painel: desativado, bloqueio manual ou fatura vencida além da tolerância. */
-    fun avaliar(a: Acesso, hoje: Int): Resultado {
+    /** Mesma regra do painel: desativado, bloqueio manual, teste grátis ou fatura vencida além da tolerância. */
+    fun avaliar(a: Acesso, hoje: Int, agora: Long = System.currentTimeMillis()): Resultado {
         val contato = if (a.negocio.isNullOrBlank()) "o suporte" else a.negocio
         if (!a.ativo) return Resultado(Estado.Bloqueado, "Conta desativada", "Esta conta está desativada. Fale com $contato.", a, hoje)
         if (a.manual) return Resultado(Estado.Bloqueado, "Acesso bloqueado", "Seu acesso está bloqueado. Fale com $contato.", a, hoje)
+        a.teste?.let { t ->
+            val fim = t.fim ?: return Resultado(Estado.SemConexao, "Não consegui iniciar o seu teste", "Verifique a internet e tente de novo daqui a pouco.", a, hoje)
+            if (agora < fim) return Resultado(Estado.Liberado, "", "", a, hoje)
+            val plano = if (a.plano.isNullOrBlank()) "mensal" else a.plano.lowercase(Locale("pt", "BR"))
+            val motivo = if (t.cortado) "Este aparelho já foi usado no teste grátis de outra conta, então o teste desta conta foi encerrado."
+            else "Seu teste grátis de ${horas(t.horas)} terminou."
+            return Resultado(
+                Estado.Bloqueado, "Seu teste grátis acabou",
+                "$motivo Para continuar assistindo, pague o Pix de ${dinheiro(a.faturaValor)} (plano $plano). Assim que o pagamento for confirmado, o acesso volta na hora.",
+                a, hoje,
+            )
+        }
         val liberado = a.liberadoAte != null && a.liberadoAte >= hoje
         if (a.bloqueiaEm != null && hoje >= a.bloqueiaEm && !liberado) {
             val msg = (if (a.faturaVenc != null) "Sua fatura de ${dinheiro(a.faturaValor)} venceu em ${Dia.fmt(a.faturaVenc)}." else "Há uma fatura em aberto.") +
@@ -270,6 +340,7 @@ object Conta {
 
     /** Lembrete de vencimento para mostrar depois de entrar (ou null). */
     fun aviso(r: Resultado?): String? {
+        r?.acesso?.teste?.fim?.let { return "Teste grátis: vai até ${quandoAcaba(it)}." }
         val v = r?.acesso?.faturaVenc ?: return null
         val valor = dinheiro(r.acesso.faturaValor)
         val d = Dia.dias(r.hoje, v)
@@ -283,11 +354,24 @@ object Conta {
 
     fun dinheiro(v: Double?): String = NumberFormat.getCurrencyInstance(Locale("pt", "BR")).format(v ?: 0.0)
 
+    private fun horas(h: Double) = if (h == Math.floor(h)) "${h.toInt()} hora${if (h.toInt() == 1) "" else "s"}" else "${"%.1f".format(Locale("pt", "BR"), h)} horas"
+
+    /** "hoje às 21:40", "amanhã às 02:10" ou "05/11 às 21:40" (no horário do aparelho). */
+    fun quandoAcaba(fim: Long, agora: Long = System.currentTimeMillis()): String {
+        val c = Calendar.getInstance().apply { timeInMillis = fim }
+        val dias = Dia.dias(Dia.de(agora), Dia.de(fim))
+        val dia = when (dias) { 0 -> "hoje"; 1 -> "amanhã"; else -> "%02d/%02d".format(c.get(Calendar.DAY_OF_MONTH), c.get(Calendar.MONTH) + 1) }
+        return "$dia às %02d:%02d".format(c.get(Calendar.HOUR_OF_DAY), c.get(Calendar.MINUTE))
+    }
+
     // ---------- leitura do documento no formato da API REST do Firestore ----------
 
     fun ler(json: String): Acesso {
         val f = JSONObject(json).getJSONObject("fields")
         val fatura = f.optJSONObject("fatura")?.optJSONObject("mapValue")?.optJSONObject("fields")
+        val teste = f.optJSONObject("teste")?.optJSONObject("mapValue")?.optJSONObject("fields")?.let { t ->
+            Teste(numero(t, "horas") ?: 0.0, numero(t, "fim")?.toLong(), !texto(t, "cortado").isNullOrEmpty(), bool(t, "bloq"), texto(t, "url"))
+        }
         return Acesso(
             login = texto(f, "login"),
             nome = texto(f, "nome"),
@@ -295,7 +379,8 @@ object Conta {
             negocio = texto(f, "negocio"),
             pix = texto(f, "pix"),
             ativo = bool(f, "ativo"),
-            manual = bool(f, "manual"),
+            // conta de teste: "manual" vem true só para os apps antigos; o bloqueio de verdade é o teste.bloq
+            manual = teste?.bloq ?: bool(f, "manual"),
             bloqueiaEm = Dia.parse(texto(f, "bloqueiaEm")),
             liberadoAte = Dia.parse(texto(f, "liberadoAte")),
             faturaVenc = fatura?.let { Dia.parse(texto(it, "venc")) },
@@ -303,6 +388,7 @@ object Conta {
             limite = numero(f, "limite")?.toInt() ?: 0,
             lista = texto(f, "lista"),
             pixUrl = texto(f, "pixUrl"),
+            teste = teste,
         )
     }
 

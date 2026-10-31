@@ -66,6 +66,67 @@ class ContaTest {
     }
 
     @Test
+    fun testeGratis() {
+        // documento de uma conta de teste: "manual" vem true (para apps antigos), mas o app novo usa o teste.bloq
+        fun doc(fim: String) = """
+            {"name":"x","fields":{
+              "login":{"stringValue":"joao4821"},"plano":{"stringValue":"Mensal"},"ativo":{"booleanValue":true},"manual":{"booleanValue":true},
+              "fatura":{"mapValue":{"fields":{"venc":{"stringValue":"2026-10-31"},"valor":{"doubleValue":19.9}}}},
+              "teste":{"mapValue":{"fields":{"horas":{"integerValue":"5"},"fim":$fim,"cortado":{"stringValue":""},
+                "bloq":{"booleanValue":false},"url":{"stringValue":"https://servidor"}}}}
+            }}
+        """.trimIndent()
+        val hoje = 20261031
+        val fim = 1_793_500_000_000L
+        val a = Conta.ler(doc("""{"integerValue":"$fim"}"""))
+        assertTrue(!a.manual)
+        assertEquals(fim, a.teste!!.fim)
+        assertEquals(Conta.Estado.Liberado, Conta.avaliar(a, hoje, fim - 60_000).estado)
+        val acabou = Conta.avaliar(a, hoje, fim + 1)
+        assertEquals(Conta.Estado.Bloqueado, acabou.estado)
+        assertEquals("Seu teste grátis acabou", acabou.titulo)
+        assertTrue(acabou.mensagem, acabou.mensagem.startsWith("Seu teste grátis de 5 horas terminou.") && acabou.mensagem.contains("19,90") &&acabou.mensagem.contains("plano mensal"))
+        // aparelho repetido: o servidor corta o teste e o motivo aparece
+        val cortado = Conta.avaliar(Conta.ler(doc("""{"integerValue":"$fim"}""")).apply { teste = teste!!.copy(cortado = true) }, hoje, fim + 1)
+        assertTrue(cortado.mensagem.startsWith("Este aparelho já foi usado no teste grátis de outra conta"))
+        // sem começar (o servidor não respondeu): não entra
+        assertEquals(Conta.Estado.SemConexao, Conta.avaliar(Conta.ler(doc("""{"nullValue":null}""")), hoje, fim).estado)
+        // o lembrete mostra quando o teste acaba
+        assertTrue(Conta.aviso(Conta.avaliar(a, hoje, fim - 60_000))!!.startsWith("Teste grátis: vai até "))
+    }
+
+    @Test
+    fun idForteDoAparelho() {
+        Conta.definirIdForte("a1b2c3d4e5f60718", "app-123")
+        val um = Conta.idForte
+        Conta.definirIdForte("A1B2C3D4E5F60718", "outro-app")
+        assertEquals(um, Conta.idForte)   // mesmo aparelho, mesmo hash (mesmo reinstalando o app)
+        Conta.definirIdForte("9774d56d682e549c", "app-123")   // ID repetido de aparelhos antigos: usa o do app
+        val doApp = Conta.idForte
+        Conta.definirIdForte(null, "app-123")
+        assertEquals(doApp, Conta.idForte)
+        assertTrue(um != doApp && um!!.matches(Regex("[0-9a-f]{64}")))
+    }
+
+    @Test
+    fun novidadesDoPainel() {
+        val json = """
+            {"documents":[
+              {"name":"x/novidades/n1","fields":{"titulo":{"stringValue":"Antiga"},"texto":{"stringValue":"a"},"data":{"stringValue":"2026-08-01"}}},
+              {"name":"x/novidades/n2","fields":{"titulo":{"stringValue":"Lupin Parte 4"},"texto":{"stringValue":"- 8 episódios"},"data":{"stringValue":"2026-10-31"}}},
+              {"name":"x/novidades/n3","fields":{"titulo":{"stringValue":"Vista"},"texto":{"stringValue":"b"},"data":{"stringValue":"2026-10-30"}}},
+              {"name":"x/novidades/n4","fields":{"titulo":{"stringValue":""},"data":{"stringValue":"2026-10-30"}}},
+              {"name":"x/novidades/n5","fields":{"titulo":{"stringValue":"Pix"},"texto":{"stringValue":"c"},"data":{"stringValue":"2026-10-25"}}}
+            ]}
+        """.trimIndent()
+        val todas = Novidades.ler(json)
+        assertEquals(4, todas.size)   // sem título não entra
+        // só as não vistas dos últimos 45 dias, da mais nova para a mais antiga
+        assertEquals(listOf("n2", "n5"), Novidades.filtrar(todas, listOf("n3"), 20261031).map { it.id })
+        assertEquals("31 de outubro de 2026", Novidades.dataPorExtenso(20261031))
+    }
+
+    @Test
     fun datas() {
         assertEquals(1, Dia.dias(20261231, 20270101))
         assertEquals(-3, Dia.dias(20260301, 20260226))

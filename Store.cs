@@ -27,6 +27,8 @@ public class AppData
     public bool AutoNext { get; set; } = true;
     // status do Discord (Rich Presence) com o que está assistindo
     public bool DiscordStatus { get; set; } = true;
+    // novidades do PLAYGER que já apareceram no popup deste aparelho (cada uma aparece uma vez)
+    public List<string> NovidadesVistas { get; set; }
     public int Caching { get; set; } = 1500;
     public string Tab { get; set; } = "movies";
     public List<string> Favorites { get; set; } = new();

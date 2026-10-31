@@ -1,0 +1,8 @@
+{
+  "name": "streamplay-lista",
+  "private": true,
+  "description": "Lista do StreamPLAY no Cloudflare R2 (publicar-lista.bat)",
+  "devDependencies": {
+    "wrangler": "^4.155.0"
+  }
+}

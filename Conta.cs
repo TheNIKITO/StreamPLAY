@@ -44,7 +44,14 @@ public static class Conta
         public int Limite { get; init; }   // limite de aparelhos (0 = sem limite)
         public string Lista { get; init; }  // link da lista que o painel entrega com o login (vazio = o cliente escolhe)
         public string PixUrl { get; init; } // servidor do Pix automático (vazio = desligado no painel)
+        public Teste Teste { get; set; }    // cadastro pelo site com teste grátis (null = cliente normal)
     }
+
+    /// <summary>
+    /// Teste grátis (cadastro pelo site): Fim = quando acaba (null = ainda não começou: começa ao abrir o app);
+    /// Cortado = o aparelho já tinha sido usado no teste de outra conta; Url = servidor do PLAYGER que inicia o teste.
+    /// </summary>
+    public record Teste(double Horas, DateTimeOffset? Fim, bool Cortado, bool Bloq, string Url);
 
     /// <summary>Pix automático: o QR Code (PNG em base64) e o "copia e cola" do que o cliente deve.</summary>
     public record Pix(bool Pendente, double Valor, int Faturas, string Copia, string Qr);
@@ -79,13 +86,19 @@ public static class Conta
         }
         using (resp)
         {
-            var hoje = resp.Headers.Date?.ToLocalTime().Date ?? DateTime.Today;
+            var agora = resp.Headers.Date ?? DateTimeOffset.UtcNow;
+            var hoje = agora.ToLocalTime().Date;
             if (resp.StatusCode == HttpStatusCode.NotFound)
                 return new(Estado.Invalido, "Login ou senha incorretos", "Confira o login e a senha que você recebeu.", null, hoje);
             if (!resp.IsSuccessStatusCode)
                 return new(Estado.SemConexao, "Servidor indisponível", $"O servidor não respondeu direito (erro {(int)resp.StatusCode}). Tente de novo daqui a pouco.", null, hoje);
             Resultado r;
-            try { r = Avaliar(Ler(await resp.Content.ReadAsStringAsync(ct)), hoje); }
+            try
+            {
+                var a = Ler(await resp.Content.ReadAsStringAsync(ct));
+                await IniciarTeste(id, a, agora, ct);
+                r = Avaliar(a, hoje, agora);
+            }
             catch (Exception ex)
             {
                 App.Log(ex);
@@ -93,6 +106,28 @@ public static class Conta
             }
             return r.Estado == Estado.Liberado ? await ConferirAparelhos(id, r, ct) : r;
         }
+    }
+
+    // ---------- teste grátis (cadastro pelo site) ----------
+    // Enquanto o teste não acabou, o app avisa o servidor do PLAYGER a cada conferência: na primeira vez o teste
+    // começa (as horas contam a partir daí) e o aparelho fica marcado com esta conta. Se este aparelho já foi usado
+    // no teste de outra conta, o servidor encerra o teste na hora. O servidor só recebe um hash do ID do aparelho.
+
+    static async Task IniciarTeste(string id, Acesso a, DateTimeOffset agora, CancellationToken ct)
+    {
+        if (a.Teste is not { Bloq: false } t || !a.Ativo || string.IsNullOrWhiteSpace(t.Url) || t.Fim is { } f && f <= agora) return;
+        try
+        {
+            var corpo = JsonSerializer.Serialize(new { acesso = id, aparelho = IdAparelho.Hash, nome = NomeDoAparelho });
+            using var resp = await Http.PostAsync(t.Url.TrimEnd('/') + "/teste", new StringContent(corpo, Encoding.UTF8, "application/json"), ct);
+            if (!resp.IsSuccessStatusCode) return;
+            using var doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync(ct));
+            var j = doc.RootElement;
+            if (!j.TryGetProperty("teste", out var tt) || tt.ValueKind != JsonValueKind.True) return;
+            DateTimeOffset? fim = j.TryGetProperty("fim", out var fm) && fm.ValueKind == JsonValueKind.Number ? DateTimeOffset.FromUnixTimeMilliseconds(fm.GetInt64()) : null;
+            a.Teste = t with { Fim = fim, Cortado = j.TryGetProperty("cortado", out var c) && c.ValueKind == JsonValueKind.True };
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException) { }
     }
 
     // ---------- limite de aparelhos ----------
@@ -106,7 +141,7 @@ public static class Conta
     static string _aparelhosOk;
     static DateTime _aparelhosEm;
 
-    public record Aparelho(string Id, string Nome, DateTimeOffset Visto);
+    public record Aparelho(string Id, string Nome, DateTimeOffset Visto, string Hw = null);
 
     public static string NomeDoAparelho => "PC – " + Environment.MachineName;
 
@@ -133,7 +168,7 @@ public static class Conta
                 _aparelhosOk = null;
                 return r with { Estado = Estado.Bloqueado, Titulo = "Limite de aparelhos atingido", Mensagem = msg, Aparelhos = true };
             }
-            if (meu == null || agora - meu.Visto > RenovarCada || meu.Nome != NomeDoAparelho)
+            if (meu == null || agora - meu.Visto > RenovarCada || meu.Nome != NomeDoAparelho || meu.Hw != IdAparelho.Hash)
                 if (!await Registrar(id, eu, ct)) return r;   // não conseguiu anotar: confere de novo na próxima
             _aparelhosOk = id;
             _aparelhosEm = DateTime.UtcNow;
@@ -144,13 +179,14 @@ public static class Conta
 
     // Grava o registro deste aparelho com a hora do servidor (as regras do Firestore só aceitam assim).
     // soSeExiste: só renova um registro que já existe (o sinal de online não recria um aparelho removido no painel).
-    // comOnline = false: sem o campo "online" (regras antigas do PLAYGER recusam o campo com 403; aí grava como antes).
+    // comOnline = false: sem os campos "online" e "hw" (regras antigas do PLAYGER recusam com 403; aí grava como antes).
+    // hw = hash do ID forte do aparelho: o teste grátis de outra conta neste aparelho é cortado (veja IdAparelho).
     static async Task<bool> Registrar(string id, string eu, CancellationToken ct, bool online = true, bool soSeExiste = false, bool comOnline = true)
     {
         var raiz = Base[..Base.TrimEnd('/').LastIndexOf('/')];   // .../documents
         var nome = $"projects/{Projeto}/databases/(default)/documents/acessos/{id}/aparelhos/{eu}";
         var campos = new Dictionary<string, object> { ["nome"] = new { stringValue = NomeDoAparelho }, ["tipo"] = new { stringValue = "pc" } };
-        if (comOnline) campos["online"] = new { booleanValue = online };
+        if (comOnline) { campos["online"] = new { booleanValue = online }; campos["hw"] = new { stringValue = IdAparelho.Hash }; }
         var escrita = new Dictionary<string, object>
         {
             ["update"] = new { name = nome, fields = campos },
@@ -187,17 +223,29 @@ public static class Conta
             aid = aid[(aid.LastIndexOf('/') + 1)..];
             var visto = Campo(f, "visto") is { } v && v.TryGetProperty("timestampValue", out var t)
                         && DateTimeOffset.TryParse(t.GetString(), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var dt) ? dt : DateTimeOffset.MinValue;
-            l.Add(new Aparelho(aid, Texto(f, "nome") ?? "Aparelho", visto));
+            l.Add(new Aparelho(aid, Texto(f, "nome") ?? "Aparelho", visto, Texto(f, "hw")));
         }
         return l;
     }
 
-    /// <summary>Mesma regra do painel: desativado, bloqueio manual ou fatura vencida além da tolerância.</summary>
-    public static Resultado Avaliar(Acesso a, DateTime hoje)
+    /// <summary>Mesma regra do painel: desativado, bloqueio manual, teste grátis ou fatura vencida além da tolerância.</summary>
+    public static Resultado Avaliar(Acesso a, DateTime hoje, DateTimeOffset agora)
     {
         var contato = string.IsNullOrWhiteSpace(a.Negocio) ? "o suporte" : a.Negocio;
         if (!a.Ativo) return new(Estado.Bloqueado, "Conta desativada", $"Esta conta está desativada. Fale com {contato}.", a, hoje);
         if (a.Manual) return new(Estado.Bloqueado, "Acesso bloqueado", $"Seu acesso está bloqueado. Fale com {contato}.", a, hoje);
+        if (a.Teste is { } t)
+        {
+            if (t.Fim is not { } fim)
+                return new(Estado.SemConexao, "Não consegui iniciar o seu teste", "Verifique a internet e tente de novo daqui a pouco.", a, hoje);
+            if (agora < fim) return new(Estado.Liberado, "", "", a, hoje);
+            var plano = string.IsNullOrWhiteSpace(a.Plano) ? "mensal" : a.Plano.ToLowerInvariant();
+            var motivo = t.Cortado
+                ? "Este aparelho já foi usado no teste grátis de outra conta, então o teste desta conta foi encerrado."
+                : $"Seu teste grátis de {t.Horas:0.#} horas terminou.";
+            return new(Estado.Bloqueado, "Seu teste grátis acabou",
+                $"{motivo} Para continuar assistindo, pague o Pix de {Dinheiro(a.FaturaValor)} (plano {plano}). Assim que o pagamento for confirmado, o acesso volta na hora.", a, hoje);
+        }
         bool liberado = a.LiberadoAte is { } l && l >= hoje;
         if (a.BloqueiaEm is { } b && hoje >= b && !liberado)
         {
@@ -211,6 +259,7 @@ public static class Conta
     /// <summary>Lembrete de vencimento para mostrar depois de entrar (ou null).</summary>
     public static string Aviso(Resultado r)
     {
+        if (r?.Acesso?.Teste is { Fim: { } fim }) return $"Teste grátis: vai até {QuandoAcaba(fim)}.";
         if (r?.Acesso?.FaturaVenc is not { } v) return null;
         var valor = Dinheiro(r.Acesso.FaturaValor);
         int d = (v - r.Hoje).Days;
@@ -222,6 +271,14 @@ public static class Conta
 
     public static string Dinheiro(double? v) => (v ?? 0).ToString("C", Br);
 
+    /// <summary>"hoje às 21:40", "amanhã às 02:10" ou "05/11 às 21:40".</summary>
+    public static string QuandoAcaba(DateTimeOffset fim)
+    {
+        var l = fim.ToLocalTime();
+        var dia = l.Date == DateTime.Today ? "hoje" : l.Date == DateTime.Today.AddDays(1) ? "amanhã" : l.ToString("dd/MM", Br);
+        return $"{dia} às {l:HH:mm}";
+    }
+
     // ---------- leitura do documento no formato da API REST do Firestore ----------
 
     static Acesso Ler(string json)
@@ -229,6 +286,13 @@ public static class Conta
         using var doc = JsonDocument.Parse(json);
         var f = doc.RootElement.GetProperty("fields");
         JsonElement? fatura = Campo(f, "fatura") is { } fx && fx.TryGetProperty("mapValue", out var mv) && mv.TryGetProperty("fields", out var ff) ? ff : null;
+        Teste teste = null;
+        if (Campo(f, "teste") is { } tx && tx.TryGetProperty("mapValue", out var tm) && tm.TryGetProperty("fields", out var tf))
+        {
+            var fim = Numero(tf, "fim");
+            teste = new(Numero(tf, "horas") ?? 0, fim is { } ms ? DateTimeOffset.FromUnixTimeMilliseconds((long)ms) : null,
+                !string.IsNullOrEmpty(Texto(tf, "cortado")), Bool(tf, "bloq"), Texto(tf, "url"));
+        }
         return new Acesso
         {
             Login = Texto(f, "login"),
@@ -237,7 +301,8 @@ public static class Conta
             Negocio = Texto(f, "negocio"),
             Pix = Texto(f, "pix"),
             Ativo = Bool(f, "ativo"),
-            Manual = Bool(f, "manual"),
+            // conta de teste: "manual" vem true só para os apps antigos; o bloqueio de verdade é o teste.bloq
+            Manual = teste != null ? teste.Bloq : Bool(f, "manual"),
             BloqueiaEm = Data(f, "bloqueiaEm"),
             LiberadoAte = Data(f, "liberadoAte"),
             FaturaVenc = fatura is { } fa ? Data(fa, "venc") : null,
@@ -245,6 +310,7 @@ public static class Conta
             Limite = (int)(Numero(f, "limite") ?? 0),
             Lista = Texto(f, "lista"),
             PixUrl = Texto(f, "pixUrl"),
+            Teste = teste,
         };
     }
 

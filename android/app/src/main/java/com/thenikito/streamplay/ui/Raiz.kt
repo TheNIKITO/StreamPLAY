@@ -38,6 +38,8 @@ import com.thenikito.streamplay.Atualizador
 import com.thenikito.streamplay.Conta
 import com.thenikito.streamplay.Dia
 import com.thenikito.streamplay.Store
+import com.thenikito.streamplay.Novidades
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -119,6 +121,7 @@ fun Raiz() {
         BannerAtualizacao()
         Abertura()
         Avisos()
+        if (Estado.novidades.isNotEmpty() && Estado.player == null) DialogoNovidades(Estado.novidades) { Estado.novidades = emptyList() }
     }
 
     // a janela de cima fechou: o foco do controle volta para o cartão de onde ela foi aberta
@@ -259,6 +262,42 @@ private fun DialogoAvisos(fechar: () -> Unit) {
         }
     }
     LaunchedEffect(Unit) { if (controle) { delay(150); try { fr.requestFocus() } catch (_: Exception) { } } }
+}
+
+/** Janela das novidades do PLAYGER (aparece uma vez ao abrir o app; veja Novidades). */
+@Composable
+private fun DialogoNovidades(lista: List<Novidades.Novidade>, fechar: () -> Unit) {
+    val fr = remember { FocusRequester() }
+    val controle = usandoControle()
+    val ctx = LocalContext.current
+    val item = remember { Regex("^\\s*[-•*]\\s+(.*)$") }
+    Dialog(onDismissRequest = fechar) {
+        Column(
+            Modifier.widthIn(max = 520.dp).clip(RoundedCornerShape(12.dp)).background(Cor.Painel).border(1.dp, Cor.Linha, RoundedCornerShape(12.dp))
+                .verticalScroll(rememberScrollState()).padding(22.dp),
+        ) {
+            Text("NOVIDADES", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = Cor.VermelhoClaro)
+            Text("O que chegou de novo", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(top = 2.dp))
+            for (n in lista) Column(Modifier.padding(top = 18.dp)) {
+                Text(Novidades.dataPorExtenso(n.data), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Cor.VermelhoClaro)
+                Text(n.titulo, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(top = 3.dp, bottom = 4.dp))
+                // como no site: linha com "-" vira item de lista; linha em branco separa parágrafos
+                for (linha in n.texto.replace("\r", "").split('\n')) {
+                    if (linha.isBlank()) { Spacer(Modifier.height(6.dp)); continue }
+                    val m = item.find(linha)
+                    Text(if (m != null) "•  " + m.groupValues[1].trim() else linha.trim(), fontSize = 15.sp, color = Color(0xFFC4C4CC),
+                        modifier = Modifier.padding(start = if (m != null) 8.dp else 0.dp, top = 2.dp))
+                }
+            }
+            Row(Modifier.padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Botao("Entendi", fechar, primario = true, focusRequester = fr)
+                Botao("Ver no site", {
+                    try { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(Novidades.SITE))) } catch (_: Exception) { }
+                })
+            }
+        }
+    }
+    LaunchedEffect(Unit) { delay(150); try { if (controle) fr.requestFocus() } catch (_: Exception) { } }
 }
 
 /** Janela do perfil: nome, login, vencimento, Configurações e Sair da conta. */
