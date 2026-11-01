@@ -215,7 +215,7 @@ enum Conta {
         _ = await registrar(id, Store.s.meuAparelho(), online: online, soSeExiste: true)
     }
 
-    static func lerAparelhos(_ d: Data) -> [Aparelho] {
+    nonisolated static func lerAparelhos(_ d: Data) -> [Aparelho] {
         guard let j = jsonObj(d), let docs = j["documents"] as? [[String: Any]] else { return [] }
         return docs.compactMap { doc in
             guard let f = doc["fields"] as? [String: Any], let nome = doc["name"] as? String else { return nil }
@@ -224,15 +224,15 @@ enum Conta {
         }
     }
 
-    private static let fmtInstante: ISO8601DateFormatter = {
+    nonisolated(unsafe) private static let fmtInstante: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f
     }()
-    private static let fmtInstante2 = ISO8601DateFormatter()
+    nonisolated(unsafe) private static let fmtInstante2 = ISO8601DateFormatter()
 
     /// "2026-10-27T18:45:17.681Z" em milissegundos.
-    static func instante(_ s: String) -> Int64? {
+    nonisolated static func instante(_ s: String) -> Int64? {
         // o Firestore manda até 9 casas: corta em 3 para o formatador entender
         var t = s
         if let ponto = t.firstIndex(of: "."), let z = t.lastIndex(of: "Z"), ponto < z {
@@ -305,7 +305,7 @@ enum Conta {
 
     // ---------- leitura do documento no formato da API REST do Firestore ----------
 
-    static func ler(_ j: [String: Any]) -> Acesso? {
+    nonisolated static func ler(_ j: [String: Any]) -> Acesso? {
         guard let f = j["fields"] as? [String: Any] else { return nil }
         let fatura = ((f["fatura"] as? [String: Any])?["mapValue"] as? [String: Any])?["fields"] as? [String: Any]
         let teste = (((f["teste"] as? [String: Any])?["mapValue"] as? [String: Any])?["fields"] as? [String: Any]).map { t in
@@ -322,9 +322,9 @@ enum Conta {
             limite: Int(numero(f, "limite") ?? 0), lista: texto(f, "lista"), pixUrl: texto(f, "pixUrl"), teste: teste)
     }
 
-    static func texto(_ f: [String: Any], _ n: String) -> String? { (f[n] as? [String: Any])?["stringValue"] as? String }
-    static func bool(_ f: [String: Any], _ n: String) -> Bool { (f[n] as? [String: Any])?["booleanValue"] as? Bool ?? false }
-    static func numero(_ f: [String: Any], _ n: String) -> Double? {
+    nonisolated static func texto(_ f: [String: Any], _ n: String) -> String? { (f[n] as? [String: Any])?["stringValue"] as? String }
+    nonisolated static func bool(_ f: [String: Any], _ n: String) -> Bool { (f[n] as? [String: Any])?["booleanValue"] as? Bool ?? false }
+    nonisolated static func numero(_ f: [String: Any], _ n: String) -> Double? {
         guard let v = f[n] as? [String: Any] else { return nil }
         if let d = v["doubleValue"] as? NSNumber { return d.doubleValue }
         if let i = v["integerValue"] as? String { return Double(i) }

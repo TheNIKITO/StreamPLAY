@@ -86,7 +86,7 @@ func mensagemErro(_ e: Error) -> String {
 
 /// Pedido HTTP simples (sem cache: o app decide quando baixar de novo). Devolve corpo, resposta e a hora do servidor.
 enum Rede {
-    static let sessao: URLSession = {
+    static let sessao: URLSessionConfiguration = {
         let c = URLSessionConfiguration.ephemeral
         c.urlCache = nil
         c.requestCachePolicy = .reloadIgnoringLocalCacheData
