@@ -1,0 +1,63 @@
+# Projeto do app de iPhone/iPad. O .xcodeproj é gerado na nuvem (GitHub Actions, macOS) com o XcodeGen:
+#   xcodegen generate && pod install
+# A versão segue a do PC/Android; numa release do GitHub ela vem da tag (veja .github/workflows/ios.yml).
+name: StreamPLAY
+options:
+  bundleIdPrefix: com.thenikito
+  deploymentTarget:
+    iOS: "15.0"
+  developmentLanguage: pt-BR
+settings:
+  base:
+    MARKETING_VERSION: "1.3.8"
+    CURRENT_PROJECT_VERSION: "10308"
+    SWIFT_VERSION: "5.0"
+    SWIFT_STRICT_CONCURRENCY: minimal
+    ENABLE_BITCODE: NO
+    DEBUG_INFORMATION_FORMAT: dwarf
+targets:
+  StreamPLAY:
+    type: application
+    platform: iOS
+    sources:
+      - path: StreamPLAY
+    scheme: {}
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.thenikito.streamplay
+        PRODUCT_NAME: StreamPLAY
+        PRODUCT_MODULE_NAME: StreamPLAY
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        GENERATE_INFOPLIST_FILE: NO
+    info:
+      path: StreamPLAY/Info.plist
+      properties:
+        CFBundleDisplayName: StreamPLAY
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundleDevelopmentRegion: pt-BR
+        LSRequiresIPhoneOS: true
+        UILaunchScreen:
+          UIColorName: Fundo
+        UIRequiresFullScreen: true
+        UIStatusBarStyle: UIStatusBarStyleLightContent
+        UIApplicationSupportsIndirectInputEvents: true
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        # links de vídeo das listas costumam ser http (sem o "s")
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+          NSAllowsArbitraryLoadsForMedia: true
+        # Chromecast: o iOS pergunta antes de deixar procurar aparelhos na rede
+        NSLocalNetworkUsageDescription: O StreamPLAY procura Chromecasts na sua rede Wi-Fi para transmitir os vídeos para a TV.
+        NSBonjourServices:
+          - _googlecast._tcp
+        ITSAppUsesNonExemptEncryption: false

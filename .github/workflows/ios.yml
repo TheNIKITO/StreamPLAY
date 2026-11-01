@@ -1,0 +1,86 @@
+# Monta o app de iPhone/iPad (StreamPLAY.ipa, sem assinatura: o cliente instala pelo AltStore ou Sideloadly).
+# - mudança em ios/: compila e deixa o .ipa nos "Artifacts" da execução (para testar)
+# - release publicada (release.ps1): compila com a versão da tag e anexa o StreamPLAY.ipa na release
+name: iOS (StreamPLAY.ipa)
+
+on:
+  push:
+    branches: [main]
+    paths: ['ios/**', '.github/workflows/ios.yml']
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  ipa:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Versão
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            V="${GITHUB_REF_NAME#v}"
+          else
+            V=$(grep -m1 'MARKETING_VERSION' ios/project.yml | sed -E 's/.*"([0-9.]+)".*/\1/')
+          fi
+          IFS=. read -r a b c <<< "$V"
+          echo "VERSAO=$V" >> "$GITHUB_ENV"
+          echo "BUILD=$(( ${a:-0} * 10000 + ${b:-0} * 100 + ${c:-0} ))" >> "$GITHUB_ENV"
+          echo "Versão $V"
+
+      - name: Ferramentas
+        run: |
+          brew install xcodegen
+          sudo xcode-select -s "$(ls -d /Applications/Xcode_16*.app | sort -V | tail -1)"
+          xcodebuild -version
+
+      - name: Projeto
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Cache do VLC
+        uses: actions/cache@v4
+        with:
+          path: |
+            ios/Pods
+            ~/Library/Caches/CocoaPods
+          key: pods-${{ runner.os }}-${{ hashFiles('ios/Podfile') }}
+
+      - name: Pods (VLC)
+        working-directory: ios
+        run: pod install
+
+      - name: Compilar
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild -workspace StreamPLAY.xcworkspace -scheme StreamPLAY -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            MARKETING_VERSION="$VERSAO" CURRENT_PROJECT_VERSION="$BUILD" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            -quiet build
+
+      - name: Montar o .ipa
+        working-directory: ios
+        run: |
+          rm -rf Payload StreamPLAY.ipa
+          mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/StreamPLAY.app Payload/
+          zip -qry StreamPLAY.ipa Payload
+          ls -lh StreamPLAY.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: StreamPLAY-${{ env.VERSAO }}-ipa
+          path: ios/StreamPLAY.ipa
+
+      - name: Anexar na release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$GITHUB_REF_NAME" ios/StreamPLAY.ipa --clobber

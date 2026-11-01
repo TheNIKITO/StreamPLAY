@@ -1,0 +1,9 @@
+# gerados na nuvem (xcodegen + pod install + xcodebuild)
+*.xcodeproj/
+*.xcworkspace/
+Pods/
+Podfile.lock
+build/
+Payload/
+*.ipa
+StreamPLAY/Info.plist
