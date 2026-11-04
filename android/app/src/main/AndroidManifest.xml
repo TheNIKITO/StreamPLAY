@@ -10,6 +10,8 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- Android 13+: sem ela a notificação "Transmitindo para..." (com Pausar/Parar) fica escondida -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- o mesmo APK serve para celular e TV: nada disso é obrigatório -->
     <uses-feature android:name="android.software.leanback" android:required="false" />

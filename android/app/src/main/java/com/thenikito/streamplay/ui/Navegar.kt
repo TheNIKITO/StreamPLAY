@@ -262,7 +262,7 @@ private fun Destaque(pool: List<Item>, kind: Kind?, mostrarCategorias: Boolean, 
     LaunchedEffect(pool) {
         while (true) {
             delay(11_000)
-            if (pool.size >= 2 && !focado && Estado.player == null && Estado.detalhes == null) indice = (indice + 1) % pool.size
+            if (pool.size >= 2 && !focado && !Estado.playerNaTela && Estado.detalhes == null) indice = (indice + 1) % pool.size
         }
     }
     LaunchedEffect(Unit) {

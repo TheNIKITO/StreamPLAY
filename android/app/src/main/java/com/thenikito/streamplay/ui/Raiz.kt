@@ -111,9 +111,10 @@ fun Raiz() {
         }
 
         val player = Estado.player
-        if (player == null) {
+        if (player == null || Estado.minimizado) {
             Estado.detalhes?.let { key(it) { TelaDetalhes(it) } }
             if (Estado.ajustes) TelaAjustes()
+            if (Estado.minimizado) Estado.controle?.let { BarraTransmitindo(it) }
         } else {
             key(player) { TelaPlayer(player) }
         }
@@ -121,11 +122,11 @@ fun Raiz() {
         BannerAtualizacao()
         Abertura()
         Avisos()
-        if (Estado.novidades.isNotEmpty() && Estado.player == null) DialogoNovidades(Estado.novidades) { Estado.novidades = emptyList() }
+        if (Estado.novidades.isNotEmpty() && !Estado.playerNaTela) DialogoNovidades(Estado.novidades) { Estado.novidades = emptyList() }
     }
 
     // a janela de cima fechou: o foco do controle volta para o cartão de onde ela foi aberta
-    val livre = Estado.detalhes == null && !Estado.ajustes && Estado.player == null
+    val livre = Estado.detalhes == null && !Estado.ajustes && !Estado.playerNaTela
     val controle = usandoControle()
     LaunchedEffect(livre) {
         if (livre && controle) {
@@ -457,7 +458,7 @@ fun Avisos() {
 fun BannerAtualizacao() {
     val v = Estado.novaVersao
     if (v == null) return
-    val mostrar = Estado.bannerAtualizacao && Estado.tela == Tela.Principal && Estado.player == null &&
+    val mostrar = Estado.bannerAtualizacao && Estado.tela == Tela.Principal && !Estado.playerNaTela &&
         Estado.detalhes == null && !Estado.ajustes
     if (!mostrar) return
     val ctx = LocalContext.current

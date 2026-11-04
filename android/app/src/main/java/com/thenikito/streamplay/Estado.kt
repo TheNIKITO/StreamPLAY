@@ -46,6 +46,12 @@ object Estado {
     var temporada by mutableIntStateOf(0)
     var ajustes by mutableStateOf(false)
     var player by mutableStateOf<PlayRequest?>(null)
+    /** O VLC do player aberto: fica aqui (e não na tela) para continuar mandando o vídeo para a TV minimizado. */
+    var controle: PlayerControle? = null; private set
+    private var controlePara: PlayRequest? = null
+    /** Transmitindo para a TV, o Voltar esconde o player: o app volta às telas com a barrinha "Transmitindo para". */
+    var minimizado by mutableStateOf(false); private set
+    val playerNaTela get() = player != null && !minimizado
     var busca by mutableStateOf("")
     /** Muda quando a aba deve voltar ao começo (saiu de um título aberto pela busca): a página fecha o "ver tudo". */
     var voltarAoInicio by mutableIntStateOf(0)
@@ -243,7 +249,7 @@ object Estado {
             val l = try { Novidades.novas() } catch (_: Exception) { return@launch }   // sem internet: na próxima abertura
             if (l.isEmpty()) return@launch
             delay(1600)   // deixa a abertura sumir e a lista aparecer primeiro
-            if (tela != Tela.Principal || player != null || detalhes != null || ajustes) { novidadesConferidas = false; return@launch }
+            if (tela != Tela.Principal || playerNaTela || detalhes != null || ajustes) { novidadesConferidas = false; return@launch }
             Novidades.marcarVistas(l)
             for (n in l.reversed()) avisar("Novidade: ${n.titulo}")
             novidades = l
@@ -389,7 +395,7 @@ object Estado {
         busca = ""
         detalhes = null
         ajustes = false
-        player = null
+        soltarPlayer()
         tela = t
     }
 
@@ -438,7 +444,7 @@ object Estado {
         aplicarPendente()
     }
 
-    private val semSobreposicao get() = detalhes == null && !ajustes && player == null
+    private val semSobreposicao get() = detalhes == null && !ajustes && !playerNaTela
 
     fun abrirDetalhes(i: Item) {
         if (semSobreposicao) focoAntes = ultimoFoco
@@ -480,14 +486,41 @@ object Estado {
         if (req == null || req.url.isNullOrBlank()) { toast("Este item não tem link de vídeo."); return }
         if (naTelaDeConta) return
         if (semSobreposicao) focoAntes = ultimoFoco
+        controle?.fechar()   // minimizado transmitindo: o novo título substitui o que estava na TV
         player = req
     }
 
     fun fecharPlayer() {
-        player = null
+        soltarPlayer()
         Store.save()
         enviarSincronia()   // saiu do player: o outro aparelho já pode continuar daqui
         aplicarPendente()
+    }
+
+    /** A tela do player pede o VLC: o mesmo de antes se ela só estava minimizada ou foi recriada pelo Android. */
+    fun controleDe(req: PlayRequest, app: Context): PlayerControle {
+        controle?.let { if (controlePara === req) return it }
+        return PlayerControle(req, app).also { controle = it; controlePara = req }
+    }
+
+    /** A tela do player saiu de vez: se este VLC ainda é o guardado, esquece e libera. */
+    fun esquecerControle(c: PlayerControle) {
+        if (controle === c) { controle = null; controlePara = null }
+        c.liberar()
+    }
+
+    fun minimizarPlayer() {
+        if (player != null && controle?.transmitindo == true) minimizado = true
+    }
+
+    fun restaurarPlayer() {
+        minimizado = false
+    }
+
+    private fun soltarPlayer() {
+        player = null
+        minimizado = false
+        controle?.let { c -> controle = null; controlePara = null; c.liberar() }
     }
 
     fun abrirCartao(c: Cartao) {

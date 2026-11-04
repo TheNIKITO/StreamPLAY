@@ -1,7 +1,10 @@
 package com.thenikito.streamplay.ui
 
+import android.Manifest
 import android.content.ActivityNotFoundException
 import android.content.pm.ActivityInfo
+import android.content.pm.PackageManager
+import android.os.Build
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.view.KeyEvent as KE
@@ -21,6 +24,7 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -39,6 +43,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -53,9 +58,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -92,6 +99,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -103,6 +111,7 @@ import com.thenikito.streamplay.Guia
 import com.thenikito.streamplay.Item
 import com.thenikito.streamplay.PlayRequest
 import com.thenikito.streamplay.PlayerControle
+import com.thenikito.streamplay.ServicoTransmissao
 import com.thenikito.streamplay.Store
 import com.thenikito.streamplay.Transmissao
 import com.thenikito.streamplay.fmtVelocidade
@@ -115,14 +124,14 @@ import org.videolan.libvlc.util.VLCVideoLayout
 import java.io.File
 
 /** Player em tela cheia com controles no estilo da Netflix (toque e controle remoto). */
-@OptIn(ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalComposeUiApi::class, ExperimentalLayoutApi::class)
 @Composable
 fun TelaPlayer(req: PlayRequest) {
     val ctx = LocalContext.current
     val tv = LocalTv.current
     val m = medidas()
     val controle = usandoControle()
-    val ctl = remember { PlayerControle(req, ctx.applicationContext) }
+    val ctl = remember { Estado.controleDe(req, ctx.applicationContext) }
     val raiz = remember { FocusRequester() }
     val play = remember { FocusRequester() }
     val seek = remember { FocusRequester() }
@@ -140,7 +149,8 @@ fun TelaPlayer(req: PlayRequest) {
         ic?.hide(WindowInsetsCompat.Type.systemBars())
         view.keepScreenOn = true
         onDispose {
-            ctl.liberar()
+            // minimizado ou a tela do app destruída pelo Android: a TV continua; senão o player fecha de vez
+            if (Estado.controle === ctl && ctl.transmitindo) ctl.soltarTela() else Estado.esquecerControle(ctl)
             view.keepScreenOn = false
             ic?.show(WindowInsetsCompat.Type.systemBars())
             if (act != null && antes != null) act.requestedOrientation = antes
@@ -160,10 +170,16 @@ fun TelaPlayer(req: PlayRequest) {
     LaunchedEffect(Unit) {
         try { ctl.preparar() } catch (e: Exception) { ctl.falhaMotor(e) }
     }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(250)
-            ctl.tick()
+    // começou a transmitir: no Android 13+ pede para mostrar a notificação (Pausar/Parar sem abrir o app), 1 vez por abertura
+    val pedirAviso = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        if (ok) ServicoTransmissao.repostar(ctx.applicationContext)
+    }
+    LaunchedEffect(ctl.transmitindo) {
+        if (ctl.transmitindo && Build.VERSION.SDK_INT >= 33 && !Transmissao.pediuAviso &&
+            ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            Transmissao.pediuAviso = true
+            pedirAviso.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 
@@ -183,7 +199,7 @@ fun TelaPlayer(req: PlayRequest) {
         when {
             ctl.painel != null -> ctl.fecharPainel()
             tv && ctl.controles && ctl.tocando && ctl.erro == null && !ctl.raizFocada -> ctl.esconderControles()
-            else -> ctl.fechar()
+            else -> ctl.voltar()
         }
     }
 
@@ -269,7 +285,8 @@ fun TelaPlayer(req: PlayRequest) {
             ) {
                 Text(e.titulo, fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
                 Text(e.texto, fontSize = 15.sp, color = Cor.Sub, lineHeight = 22.sp, modifier = Modifier.padding(top = 8.dp, bottom = 18.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                // três botões (transmitindo) não cabem numa linha: o "Voltar" desce em vez de virar "V…"
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Botao("Tentar de novo", { ctl.tentarDeNovo() }, primario = true, focusRequester = tentar)
                     if (ctl.transmitindo) Botao("Assistir no celular", { ctl.transmitir(null) })
                     Botao("Voltar", { ctl.fechar() })
@@ -332,7 +349,7 @@ private fun Controles(ctl: PlayerControle, play: FocusRequester, seek: FocusRequ
                 .padding(horizontal = m.margem)
                 .padding(top = if (m.tv) 24.dp else 12.dp, bottom = 28.dp),
         ) {
-            Botao("Voltar", { ctl.fechar() }, icone = Icons.AutoMirrored.Filled.ArrowBack, tamanhoTexto = 15.sp)
+            Botao("Voltar", { ctl.voltar() }, icone = Icons.AutoMirrored.Filled.ArrowBack, tamanhoTexto = 15.sp)
             Row(Modifier.padding(top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (!r.item.logo.isNullOrBlank()) {
                     val larg = if (m.largo) 64.dp else 44.dp
@@ -520,7 +537,7 @@ private fun Osd(ctl: PlayerControle, modifier: Modifier) {
     LaunchedEffect(o) {
         if (o == null) return@LaunchedEffect
         visivel = o.texto
-        delay(1700)
+        delay(o.ms)
         visivel = null
     }
     AnimatedVisibility(visivel != null, modifier = modifier.padding(top = 150.dp), enter = fadeIn(tween(80)), exit = fadeOut(tween(400))) {
@@ -642,6 +659,48 @@ private fun InfoTransmitindo(ctl: PlayerControle, aparelho: String) {
             Text(r.title, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold, lineHeight = 32.sp, modifier = Modifier.padding(top = 6.dp),
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center)
             r.episode?.let { Text("T${it.season} • E${it.number}   ${it.title}".trimEnd(), color = Color(0xFFD0D0D0), fontSize = 15.sp, modifier = Modifier.padding(top = 6.dp)) }
+        }
+    }
+}
+
+/** Player minimizado transmitindo: barrinha embaixo das telas. Toque abre o player; pausar e parar a transmissão. */
+@Composable
+fun BarraTransmitindo(ctl: PlayerControle) {
+    val r = ctl.req
+    Box(Modifier.fillMaxSize().navigationBarsPadding().padding(10.dp), contentAlignment = Alignment.BottomCenter) {
+        Row(
+            Modifier
+                .widthIn(max = 640.dp)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(Cor.Cartao)
+                .border(1.dp, Cor.Linha, RoundedCornerShape(12.dp))
+                .clickable { Estado.restaurarPlayer() }
+                .padding(start = 10.dp, end = 2.dp, top = 8.dp, bottom = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (!r.item.logo.isNullOrBlank()) {
+                Imagem(r.item.logo, r.item.name, Modifier.width(34.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(4.dp)), tamanhoNome = 6.sp)
+                Spacer(Modifier.width(12.dp))
+            }
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icones.Transmitir, null, tint = Cor.Vermelho, modifier = Modifier.size(14.dp))
+                    Text(
+                        "Transmitindo para ${ctl.transmitindoPara ?: "a TV"}", color = Cor.Sub, fontSize = 12.sp, maxLines = 1,
+                        overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 6.dp),
+                    )
+                }
+                Text(r.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (ctl.erro != null) Text("Não foi possível transmitir. Toque para ver.", color = Cor.VermelhoClaro, fontSize = 12.sp)
+                else r.episode?.let { Text("T${it.season} • E${it.number}   ${it.title}".trimEnd(), color = Cor.Dim, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            }
+            IconButton(onClick = { ctl.togglePlay() }) {
+                Icon(if (ctl.tocando) Icones.Pausa else Icons.Filled.PlayArrow, if (ctl.tocando) "Pausar" else "Reproduzir", tint = Color.White)
+            }
+            IconButton(onClick = { ctl.fechar() }) {
+                Icon(Icons.Filled.Close, "Parar a transmissão", tint = Color.White)
+            }
         }
     }
 }

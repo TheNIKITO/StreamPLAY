@@ -43,6 +43,9 @@ object Transmissao {
 
     val buscando get() = busca != null
 
+    /** A última transmissão para [atual] falhou: o próximo título toca no celular até a pessoa escolher a TV de novo. */
+    var falhou = false
+
     fun nome(a: RendererItem): String = a.displayName?.takeIf { it.isNotBlank() } ?: a.name ?: "Chromecast"
 
     fun mesmo(a: RendererItem, b: RendererItem) = a.name == b.name && a.type == b.type
@@ -53,6 +56,7 @@ object Transmissao {
         if (a != null) a.retain()   // o item continua valendo mesmo depois que a busca para
         atual?.release()
         atual = a
+        falhou = false
     }
 
     fun iniciar(ctx: Context) {
@@ -104,11 +108,25 @@ object Transmissao {
 
     // ---------- serviço: mantém a transmissão com a tela apagada ----------
 
-    fun avisarInicio(ctx: Context, aparelho: String) {
-        val i = Intent(ctx, ServicoTransmissao::class.java).putExtra("aparelho", aparelho)
+    /** Já pediu a permissão de notificação nesta abertura do app (o Android também para de perguntar depois de 2 "não"). */
+    var pediuAviso = false
+
+    fun avisarInicio(ctx: Context, aparelho: String, titulo: String) {
+        ServicoTransmissao.aparelho = aparelho
+        ServicoTransmissao.titulo = titulo
+        ServicoTransmissao.tocando = true
+        val i = Intent(ctx, ServicoTransmissao::class.java)
         try {
             if (Build.VERSION.SDK_INT >= 26) ctx.startForegroundService(i) else ctx.startService(i)
         } catch (_: Exception) { }
+    }
+
+    /** O player mudou (pausou, voltou, outro episódio): atualiza o título e o botão Pausar/Continuar da notificação. */
+    fun avisarEstado(ctx: Context, titulo: String, tocando: Boolean) {
+        if (ServicoTransmissao.titulo == titulo && ServicoTransmissao.tocando == tocando) return
+        ServicoTransmissao.titulo = titulo
+        ServicoTransmissao.tocando = tocando
+        ServicoTransmissao.repostar(ctx)
     }
 
     fun avisarFim(ctx: Context) {
@@ -118,7 +136,8 @@ object Transmissao {
 
 /**
  * Enquanto transmite, é o celular que busca o vídeo e manda para a TV. Com a tela apagada o Android pararia o app;
- * este serviço (com o aviso "Transmitindo para ..." na barra) mantém o processador e o Wi-Fi acordados.
+ * este serviço (com o aviso "Transmitindo para ..." na barra) mantém o processador e o Wi-Fi acordados. O aviso tem
+ * Pausar/Continuar e Parar, para controlar a TV sem abrir o app; tocar nele abre o player.
  */
 class ServicoTransmissao : Service() {
     private var cpu: PowerManager.WakeLock? = null
@@ -128,26 +147,20 @@ class ServicoTransmissao : Service() {
 
     @SuppressLint("WakelockTimeout")
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val aparelho = intent?.getStringExtra("aparelho") ?: "a TV"
-        val gerente = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        if (Build.VERSION.SDK_INT >= 26 && gerente.getNotificationChannel(CANAL) == null)
-            gerente.createNotificationChannel(NotificationChannel(CANAL, "Transmitindo para a TV", NotificationManager.IMPORTANCE_LOW))
-        val abrir = PendingIntent.getActivity(
-            this, 0, Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
-            PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0),
-        )
-        val aviso: Notification = NotificationCompat.Builder(this, CANAL)
-            .setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle("Transmitindo para $aparelho")
-            .setContentText("Deixe o StreamPLAY aberto enquanto a TV mostra o vídeo.")
-            .setContentIntent(abrir)
-            .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
+        // botões da notificação (chegam na linha principal, igual aos toques na tela)
+        when (intent?.action) {
+            PAUSAR, PARAR -> {
+                val c = Estado.controle?.takeIf { it.transmitindo }
+                if (c == null) { stopSelf(); return START_NOT_STICKY }
+                if (intent.action == PAUSAR) c.togglePlay() else c.fechar()   // fechar para a TV e desliga este serviço
+                return START_NOT_STICKY
+            }
+        }
         ServiceCompat.startForeground(
-            this, 1, aviso,
+            this, ID, aviso(this),
             if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK else 0,
         )
+        rodando = true
         if (cpu == null) cpu = (getSystemService(Context.POWER_SERVICE) as PowerManager)
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "StreamPLAY:transmitindo").apply { setReferenceCounted(false); acquire() }
         if (wifi == null) {
@@ -159,6 +172,7 @@ class ServicoTransmissao : Service() {
     }
 
     override fun onDestroy() {
+        rodando = false
         try { cpu?.release() } catch (_: Exception) { }
         try { wifi?.release() } catch (_: Exception) { }
         cpu = null
@@ -168,5 +182,46 @@ class ServicoTransmissao : Service() {
 
     companion object {
         private const val CANAL = "transmitir"
+        private const val ID = 1
+        const val PAUSAR = "com.thenikito.streamplay.PAUSAR"
+        const val PARAR = "com.thenikito.streamplay.PARAR"
+
+        var aparelho = "a TV"
+        var titulo = ""
+        var tocando = true
+        private var rodando = false
+
+        private fun aviso(ctx: Context): Notification {
+            val gerente = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            if (Build.VERSION.SDK_INT >= 26 && gerente.getNotificationChannel(CANAL) == null)
+                gerente.createNotificationChannel(NotificationChannel(CANAL, "Transmitindo para a TV", NotificationManager.IMPORTANCE_LOW))
+            val imutavel = PendingIntent.FLAG_UPDATE_CURRENT or (if (Build.VERSION.SDK_INT >= 23) PendingIntent.FLAG_IMMUTABLE else 0)
+            val abrir = PendingIntent.getActivity(
+                ctx, 0, Intent(ctx, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP).putExtra(MainActivity.ABRIR_PLAYER, true), imutavel,
+            )
+            fun acao(nome: String, codigo: Int) = PendingIntent.getService(ctx, codigo, Intent(ctx, ServicoTransmissao::class.java).setAction(nome), imutavel)
+            return NotificationCompat.Builder(ctx, CANAL)
+                .setSmallIcon(android.R.drawable.ic_media_play)
+                .setContentTitle("Transmitindo para $aparelho")
+                .setContentText(titulo.ifBlank { "StreamPLAY" })
+                .setStyle(NotificationCompat.BigTextStyle().bigText("$titulo\nNão feche o StreamPLAY: é o celular que manda o vídeo para a TV.".trimStart()))
+                .setContentIntent(abrir)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)   // dá para pausar com o celular bloqueado
+                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .addAction(
+                    if (tocando) android.R.drawable.ic_media_pause else android.R.drawable.ic_media_play,
+                    if (tocando) "Pausar" else "Continuar", acao(PAUSAR, 1),
+                )
+                .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Parar", acao(PARAR, 2))
+                .build()
+        }
+
+        /** Troca a notificação do serviço já ligado (sem a permissão no Android 13+ ela só não aparece). */
+        fun repostar(ctx: Context) {
+            if (!rodando) return   // serviço desligado: não deixa um aviso "Transmitindo" sobrando
+            try { (ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).notify(ID, aviso(ctx)) } catch (_: Exception) { }
+        }
     }
 }

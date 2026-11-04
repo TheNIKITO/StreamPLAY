@@ -11,6 +11,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.videolan.libvlc.Media
 import org.videolan.libvlc.MediaPlayer
 import org.videolan.libvlc.RendererItem
@@ -20,7 +22,7 @@ import java.io.File
 import java.util.Locale
 
 class Erro(val titulo: String, val texto: String)
-class Osd(val texto: String)
+class Osd(val texto: String, val ms: Long = 1700)
 class Flash(val tipo: String)
 
 /** O player (VLC) com as mesmas regras do PlayerView do PC: retomar, próximo episódio, troca de canal e a vigia. */
@@ -77,6 +79,7 @@ class PlayerControle(primeiro: PlayRequest, private val app: Context) {
     private var religados = 0
     private var simulado = false
     private var reabrirEm = -1L
+    private var vistoAte = 0L   // o ponto mais adiantado que este vídeo chegou a tocar
     private var vouts = 0
     private var creditsDismissed = false
     private var ultimoToque = agora()
@@ -88,6 +91,8 @@ class PlayerControle(primeiro: PlayRequest, private val app: Context) {
     companion object {
         /** Links em que o vídeo não apareceu com aceleração: abrem direto sem ela. */
         private val semAceleracao = HashSet<String>()
+        /** O VLC anterior ainda parando (fora da linha principal): o próximo espera, senão os dois disputam a TV. */
+        @Volatile private var soltando: Thread? = null
         private fun agora() = SystemClock.elapsedRealtime()
         private val PT = Regex("portugu|\\bpt\\b|\\bpor\\b|dublad", RegexOption.IGNORE_CASE)
     }
@@ -99,12 +104,26 @@ class PlayerControle(primeiro: PlayRequest, private val app: Context) {
     // ---------- Início ----------
 
     suspend fun preparar() {
+        if (mp != null) return   // a tela do player voltou (estava minimizada): o VLC é o mesmo
         val lib = Vlc.pronto()
-        if (fechado) return
+        soltando?.let { t -> withContext(Dispatchers.IO) { t.join(10_000) } }
+        if (fechado || mp != null) return
         mp = MediaPlayer(lib).also { it.setEventListener { e -> evento(e.type, e.buffering, e.voutCount) } }
         // estava transmitindo para a TV: o próximo título também vai para lá (até a pessoa escolher "Este celular")
-        Transmissao.atual?.let { a -> if (mp?.setRenderer(a) == 0) ligarTransmissao(a) }
+        Transmissao.atual?.let { a ->
+            if (Transmissao.falhou) mostrarOsd("A TV não respondeu da última vez: tocando neste celular", 5000)
+            else if (mp?.setRenderer(a) == 0) ligarTransmissao(a)
+        }
+        main.postDelayed(relogio, 250)
         talvezComecar()
+    }
+
+    // o relógio é do player e não da tela: minimizado (transmitindo) continua salvando e passando de episódio
+    private val relogio = object : Runnable {
+        override fun run() {
+            tick()
+            if (!fechado) main.postDelayed(this, 250)
+        }
     }
 
     fun falhaMotor(e: Throwable) {
@@ -149,6 +168,7 @@ class PlayerControle(primeiro: PlayRequest, private val app: Context) {
         proximo = if (r.episode != null) Resume.next(r.episode) else null
         tempo = 0
         duracao = 0
+        vistoAte = 0
         ocupado = true
 
         val media = criarMedia(r)
@@ -210,6 +230,7 @@ class PlayerControle(primeiro: PlayRequest, private val app: Context) {
 
     private fun onPlaying() {
         if (playingAt == 0L) playingAt = agora()
+        if (transmitindo) Transmissao.falhou = false
         tocando = true
         pausadoInfo = false
     }
@@ -222,15 +243,41 @@ class PlayerControle(primeiro: PlayRequest, private val app: Context) {
             return
         }
         val len = mp.length
+        // transmitindo, a TV que sai do ar (desligou, caiu o Wi-Fi) também chega aqui como "fim": sem isso o app marcava
+        // o episódio como assistido e pulava para o próximo, que "acabava" na hora, até o fim da temporada
+        if (transmitindo && !(len > 0 && vistoAte >= len - 60_000)) {
+            tvFalhou("A transmissão para $transmitindoPara caiu", "A TV parou de receber o vídeo. Confira se ela está ligada e no mesmo Wi-Fi deste celular. O ponto onde você parou foi guardado.")
+            return
+        }
         if (len > 0) Store.setProgress(req.key, len, len, req.showKey)
         if (proximo != null && Store.autoNext && !creditsDismissed) { playNext(); return }
         fechar()
     }
 
+    /** A TV falhou: tenta de novo uma vez sozinho (do ponto onde estava); se falhar de novo, avisa e para. */
+    private fun tvFalhou(titulo: String, texto: String) {
+        val tv = cast
+        if (tv != null) SessaoTv.esquecer(tv)
+        if (retries++ < 1) {
+            if (vistoAte > 0) reabrirEm = maxOf(0L, vistoAte - 5000)
+            mostrarOsd("A TV parou de responder. Tentando de novo…", 5000)
+            ocupado = true
+            val r = req
+            Thread {   // espera a TV se ajeitar, fecha a sessão que ficou presa nela e manda de novo
+                Thread.sleep(2000)
+                if (tv != null && !fechado) SessaoTv.limpar(app, tv)
+                main.post { if (!fechado && mp != null && req === r) start(r) }
+            }.start()
+            return
+        }
+        Transmissao.falhou = true   // o próximo título não vai sozinho para essa TV
+        mostrarErro(titulo, texto)
+    }
+
     private fun onError() {
         if (req.isLive && retries++ < 2) { retry(1500); return }
         if (transmitindo) {
-            mostrarErro(
+            tvFalhou(
                 "Não foi possível transmitir para $transmitindoPara",
                 "Confira se a TV está ligada e na mesma rede Wi-Fi deste celular, e tente de novo.",
             )
@@ -260,6 +307,17 @@ class PlayerControle(primeiro: PlayRequest, private val app: Context) {
     fun tentarDeNovo() {
         retries = 0
         if (mp == null) { erro = null; return }
+        val tv = cast
+        if (tv != null && SessaoTv.precisa(tv)) {   // a TV tinha falhado: limpa a sessão presa nela antes
+            erro = null
+            ocupado = true
+            val r = req
+            Thread {
+                SessaoTv.limpar(app, tv)
+                main.post { if (!fechado && mp != null && req === r) start(r) }
+            }.start()
+            return
+        }
         start(req)
     }
 
@@ -275,6 +333,8 @@ class PlayerControle(primeiro: PlayRequest, private val app: Context) {
         val playing = st == 3
 
         if (playing) { vigiar(now, t); guardarSom(now, t) }
+        if (playing && t > vistoAte) vistoAte = t
+        if (transmitindo) Transmissao.avisarEstado(app, tituloAviso(), tocando)
         if (playing && t > 0 && lastTime >= 0 && t != lastTime) cache = 100f
         lastTime = t
         if (playing && now - startedAt > 20_000) retries = 0
@@ -374,6 +434,7 @@ class PlayerControle(primeiro: PlayRequest, private val app: Context) {
         val len = mp.length
         val t = mp.time
         lastSave = agora()
+        if (playingAt == 0L || erro != null) return   // não chegou a tocar ou falhou: vale o que já estava guardado
         if (len <= 0 || t < 0) return
         if (t < 10_000 && Store.getProgress(req.key) == null) return
         Store.setProgress(req.key, t, len, req.showKey)
@@ -511,8 +572,8 @@ class PlayerControle(primeiro: PlayRequest, private val app: Context) {
         mostrarOsd(next.name)
     }
 
-    fun mostrarOsd(texto: String) {
-        osd = Osd(texto)
+    fun mostrarOsd(texto: String, ms: Long = 1700) {
+        osd = Osd(texto, ms)
     }
 
     // ---------- Áudio, legendas, velocidade e imagem ----------
@@ -578,13 +639,14 @@ class PlayerControle(primeiro: PlayRequest, private val app: Context) {
         painel = null
         if (if (alvo == null) !transmitindo else transmitindo && Transmissao.ehOAtual(alvo)) return
         salvarProgresso()
-        val t = if (req.isLive || mp.length <= 0) -1L else maxOf(0L, mp.time - 2000)
+        val t = if (req.isLive || mp.length <= 0 || erro != null) -1L else maxOf(0L, mp.time - 2000)
         val r = req
         ocupado = true
         // O VLC só liga o aparelho novo numa reprodução que começa depois da troca: para (fora da linha principal,
         // parar uma transmissão pode demorar), troca e reabre do mesmo ponto
         Thread {
             try { mp.stop() } catch (_: Exception) { }
+            if (alvo != null && SessaoTv.precisa(alvo)) SessaoTv.limpar(app, alvo)
             main.post {
                 if (fechado || this.mp !== mp) return@post
                 val ok = mp.setRenderer(alvo) == 0
@@ -601,8 +663,10 @@ class PlayerControle(primeiro: PlayRequest, private val app: Context) {
     private fun ligarTransmissao(a: RendererItem) {
         cast = a
         transmitindoPara = Transmissao.nome(a)
-        Transmissao.avisarInicio(app, transmitindoPara!!)
+        Transmissao.avisarInicio(app, transmitindoPara!!, tituloAviso())
     }
+
+    private fun tituloAviso() = req.title + (req.episode?.let { " · T${it.season} • E${it.number}" } ?: "")
 
     private fun desligarTransmissao() {
         if (cast == null) return
@@ -631,7 +695,20 @@ class PlayerControle(primeiro: PlayRequest, private val app: Context) {
         if (recomecarAoVoltar) { recomecarAoVoltar = false; start(req) } else mostrarControles()
     }
 
+    /** A tela do player saiu mas a TV continua (minimizado, ou o Android destruiu a tela): só solta a imagem. */
+    fun soltarTela() {
+        val mp = mp ?: return
+        if (anexado) { mp.detachViews(); anexado = false }
+        layout = null
+        Transmissao.parar()   // a busca de aparelhos só serve com o painel aberto (a TV escolhida continua guardada)
+    }
+
     // ---------- Encerrar ----------
+
+    /** Voltar: transmitindo, só esconde o player (a TV continua); senão fecha. */
+    fun voltar() {
+        if (transmitindo && !fechado && erro == null) Estado.minimizarPlayer() else fechar()   // com erro na tela, fecha
+    }
 
     fun fechar() {
         if (fechado) return
@@ -652,10 +729,10 @@ class PlayerControle(primeiro: PlayRequest, private val app: Context) {
         try { mp.setEventListener(null) } catch (_: Exception) { }
         try { if (anexado) mp.detachViews() } catch (_: Exception) { }
         anexado = false
-        Thread {
+        soltando = Thread {
             try { mp.stop() } catch (_: Exception) { }
             try { mp.release() } catch (_: Exception) { }
-        }.start()
+        }.also { it.start() }
     }
 }
 
