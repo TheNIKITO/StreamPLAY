@@ -49,7 +49,7 @@ public partial class PlayerView : UserControl
         _req = req;
         App.ErroDeSom += ErroDeSomVlc;
         Loaded += OnLoaded;
-        _tick.Tick += (_, _) => Tick();
+        _tick.Tick += (_, _) => TickSeguro();
         _clickTimer.Tick += (_, _) => { _clickTimer.Stop(); TogglePlay(); };
         Ui.MouseMove += Ui_MouseMove;
         Ui.MouseLeftButtonDown += Ui_MouseDown;
@@ -296,6 +296,20 @@ public partial class PlayerView : UserControl
 
     // ---------- Laço de atualização ----------
 
+    string _tickErro;
+
+    // O DispatcherTimer para de vez se o Tick lançar exceção: o tempo congela, o HUD nunca mais some e a contagem
+    // do próximo episódio morre. Um erro aqui vai para o erros.log (uma vez) e o laço continua.
+    void TickSeguro()
+    {
+        try { Tick(); }
+        catch (Exception ex)
+        {
+            if (ex.Message != _tickErro) App.Log(ex);
+            _tickErro = ex.Message;
+        }
+    }
+
     void Tick()
     {
         if (_mp == null || _closing) return;
@@ -322,8 +336,9 @@ public partial class PlayerView : UserControl
             if (_next != null && !_nextShown && !_creditsDismissed && len > 180000 && t > 0 && len - t < 25000) ShowNextCard();
             if (_nextShown && Store.D.AutoNext)
             {
-                double f = (now - _nextShownAt).TotalSeconds / 10.0;
-                NextFill.Width = Math.Min(1, f) * NextNowBtn.ActualWidth;
+                // now foi lido antes do ShowNextCard, então no primeiro instante f sai um pouquinho negativo
+                double f = Math.Clamp((now - _nextShownAt).TotalSeconds / 10.0, 0, 1);
+                NextFill.Width = f * NextNowBtn.ActualWidth;
                 if (f >= 1) { PlayNext(); return; }
             }
         }
