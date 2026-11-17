@@ -57,8 +57,6 @@ object Estado {
     var modoIa by mutableStateOf(false)
     /** O pedido que a IA está respondendo (ou já respondeu) na página; null = sem busca com IA. */
     var pedidoIa by mutableStateOf<String?>(null)
-    /** Muda quando a aba deve voltar ao começo (saiu de um título aberto pela busca): a página fecha o "ver tudo". */
-    var voltarAoInicio by mutableIntStateOf(0)
     var aviso by mutableStateOf<Aviso?>(null)
     /** Novidades do PLAYGER para a janela de novidades (vazia = fechada). */
     var novidades by mutableStateOf<List<Novidades.Novidade>>(emptyList())
@@ -479,14 +477,7 @@ object Estado {
 
     fun fecharDetalhes() {
         detalhes = null
-        // saiu de um título aberto pela busca: a aba volta para o começo (o cartão da busca some, o foco vai para o destaque)
-        if (busca.isNotEmpty()) {
-            busca = ""
-            sairDaIa()
-            voltarAoInicio++
-            focoAntes = null
-            focoInicialPendente = true
-        }
+        // saiu de um título aberto pela busca: a busca continua na tela, do jeito que estava (o foco volta para o cartão)
         aplicarPendente()
     }
 

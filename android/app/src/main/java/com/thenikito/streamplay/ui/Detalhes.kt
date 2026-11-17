@@ -30,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Text
@@ -96,6 +97,7 @@ fun TelaDetalhes(item: Item) {
     // temporada escolhida nos chips; antes de escolher, a do episódio atual
     val temporada = if (Estado.temporada != 0) Estado.temporada else atualEp?.season ?: 1
     val eps = remember(item, temporada) { item.episodes.filter { it.season == temporada } }
+    val noContinuar = remember(item, versao) { Estado.lib?.let { Resume.noContinuar(it, item) } ?: false }
     val fav = Store.isFav(item.key) && versao >= 0
 
     Box(
@@ -162,6 +164,14 @@ fun TelaDetalhes(item: Item) {
                         BarraProgresso(p.fraction.toFloat(), Modifier.width(200.dp))
                         Text(faltam(p.dur - p.pos), color = Cor.Sub, fontSize = 13.sp, modifier = Modifier.padding(start = 12.dp))
                     }
+                    if (noContinuar) Botao("Remover do Continuar assistindo", {
+                        Resume.tirarDoContinuar(item)
+                        Store.versao.intValue++
+                        Estado.enviarSincronia()
+                        Estado.toast("\"${item.name}\" saiu do Continuar assistindo")
+                        // na TV o botão some com o foco nele: o foco volta para o Assistir
+                        if (controle) try { tocar.requestFocus() } catch (_: Exception) { }
+                    }, icone = Icons.Filled.Delete, modifier = Modifier.padding(bottom = 14.dp), tamanhoTexto = 14.sp)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         if (item.isRelease) Selo("LANÇAMENTO", Modifier.padding(end = 12.dp))
                         if (!item.year.isNullOrEmpty()) Meta(item.year!!, Color(0xFFBCBCBC))

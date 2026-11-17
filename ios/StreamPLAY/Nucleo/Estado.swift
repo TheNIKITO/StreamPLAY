@@ -450,11 +450,7 @@ final class Estado: ObservableObject {
 
     func fecharDetalhes() {
         detalhes = nil
-        // saiu de um título aberto pela busca: a aba volta para o começo
-        if !busca.isEmpty {
-            busca = ""
-            voltarAoInicio += 1
-        }
+        // saiu de um título aberto pela busca: a busca continua na tela, do jeito que estava
         aplicarPendente()
     }
 

@@ -609,6 +609,13 @@
               <Viewbox Width="18" Height="18" Margin="3,0,0,0"><Path Style="{StaticResource IcoF}" Data="{StaticResource G.Play}"/></Viewbox>
             </Border>
           </Border>
+          <!-- X no canto (só com o mouse em cima): tira do "Continuar assistindo" -->
+          <Button x:Name="tirar" Style="{StaticResource Plain}" Tag="tirar" Opacity="0" IsHitTestVisible="False" HorizontalAlignment="Right" VerticalAlignment="Top"
+                  Margin="6" ToolTip="Remover do Continuar assistindo" AutomationProperties.Name="Remover do Continuar assistindo">
+            <Border x:Name="tirarFundo" Width="30" Height="30" CornerRadius="15" Background="#CC0D0D11" BorderBrush="#80FFFFFF" BorderThickness="1" IsHitTestVisible="True">
+              <Viewbox Width="11" Height="11"><Path Style="{StaticResource IcoS}" Data="{StaticResource G.Close}" StrokeThickness="3"/></Viewbox>
+            </Border>
+          </Button>
         </Grid>
         <TextBlock Text="{Binding Name}" Foreground="White" FontSize="14" FontWeight="SemiBold" Margin="2,9,2,0" TextTrimming="CharacterEllipsis"/>
         <TextBlock Text="{Binding Sub}" Foreground="#9A9AA4" FontSize="12.5" Margin="2,2,2,0" TextTrimming="CharacterEllipsis"/>
@@ -623,6 +630,11 @@
     <DataTemplate.Triggers>
       <DataTrigger Binding="{Binding IsMouseOver, ElementName=btn}" Value="True">
         <Setter TargetName="play" Property="Opacity" Value="1"/>
+        <Setter TargetName="tirar" Property="Opacity" Value="1"/>
+        <Setter TargetName="tirar" Property="IsHitTestVisible" Value="True"/>
+      </DataTrigger>
+      <DataTrigger Binding="{Binding IsMouseOver, ElementName=tirar}" Value="True">
+        <Setter TargetName="tirarFundo" Property="Background" Value="#E50914"/>
       </DataTrigger>
     </DataTemplate.Triggers>
   </DataTemplate>

@@ -369,6 +369,12 @@ public partial class BrowseView : UserControl, IPage
                 else if (c.Direct) MainWindow.I.Play(PlayRequest.ForItem(c.Item));
                 else MainWindow.I.ShowDetails(c.Item);
                 break;
+            case "tirar" when fe.DataContext is Card c:   // X do cartão do "Continuar assistindo"
+                Resume.TirarDoContinuar(c.Item);
+                MainWindow.I.EnviarSincronia();
+                Refresh();
+                MainWindow.I.Toast($"\"{c.Item.Name}\" saiu do Continuar assistindo");
+                break;
             case "hero-play" when fe.DataContext is HeroVM h:
                 MainWindow.I.Play(PlayRequest.ForItem(h.Item));
                 break;

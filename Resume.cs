@@ -52,6 +52,19 @@ public static class Resume
         return i >= 0 && i + 1 < list.Count ? list[i + 1] : null;
     }
 
+    /// <summary>
+    /// Tira um filme ou série do "Continuar assistindo": o ponto onde parou volta ao começo, com a hora de agora. Assim a
+    /// sincronização leva a remoção para os outros aparelhos (vale o mais recente) em vez de trazer o progresso de volta.
+    /// </summary>
+    public static void TirarDoContinuar(Item item)
+    {
+        string key = item.Kind == Kind.Series
+            ? item.Episodes.Select(e => e.Key).Where(k => Store.GetProgress(k) != null).MaxBy(k => Store.GetProgress(k).At)
+            : item.Key;
+        if (Store.GetProgress(key) is not { } p) return;
+        Store.SetProgress(key, 0, p.Dur, p.Show);
+    }
+
     /// <param name="kind">null = filmes e séries juntos (página Início)</param>
     public static List<Card> ContinueCards(Library lib, Kind? kind)
     {

@@ -48,6 +48,21 @@ object Resume {
         return if (i >= 0 && i + 1 < list.size) list[i + 1] else null
     }
 
+    /**
+     * Tira um filme ou série do "Continuar assistindo": o ponto onde parou volta ao começo, com a hora de agora. Assim a
+     * sincronização leva a remoção para os outros aparelhos (vale o mais recente) em vez de trazer o progresso de volta.
+     */
+    fun tirarDoContinuar(item: Item) {
+        val key = if (item.kind == Kind.Series)
+            item.episodes.map { it.key }.filter { Store.getProgress(it) != null }.maxByOrNull { Store.getProgress(it)!!.at }
+        else item.key
+        val p = Store.getProgress(key) ?: return
+        Store.setProgress(key!!, 0, p.dur, p.show)
+    }
+
+    /** O título aparece hoje no "Continuar assistindo"? */
+    fun noContinuar(lib: Library, item: Item): Boolean = continueCards(lib, item.kind).any { it.item === item }
+
     /** kind = null: filmes e séries juntos (aba Início). */
     fun continueCards(lib: Library, kind: Kind?): List<Cartao> {
         val cards = ArrayList<Cartao>()

@@ -577,6 +577,9 @@ public partial class MainWindow : Window
         SearchWrap.BorderThickness = new Thickness(0);
         SearchWrap.Background = System.Windows.Media.Brushes.Transparent;
         SearchBox.BeginAnimation(WidthProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(180)));
+        // a lista nova que chegou durante a busca entra agora (depois, para não trocar a tela no meio de uma navegação)
+        if (_pendingLib != null)
+            Dispatcher.BeginInvoke(DispatcherPriority.Background, () => { if (_pendingLib != null) ApplyRemote(_pendingLib); });
     }
 
     public void FecharBusca() => CloseSearch(clear: true);
@@ -615,12 +618,7 @@ public partial class MainWindow : Window
     public void CloseOverlay()
     {
         if (OverlayHost.Visibility != Visibility.Visible) return;
-        // saiu de um título aberto pela busca: a aba volta para o começo
-        if (SearchBox.Text.Length > 0 && OverlayHost.Children.OfType<DetailsView>().Any())
-        {
-            CloseSearch(clear: true);
-            (PageHost.Content as IPage)?.Inicio();
-        }
+        // saiu de um título aberto pela busca: a busca continua na tela, do jeito que estava
         UI.Fade(OverlayHost, 0, 150, () =>
         {
             if (OverlayHost.Opacity > 0.01) return;

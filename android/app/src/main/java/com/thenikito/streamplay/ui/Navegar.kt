@@ -117,7 +117,6 @@ private fun linhasDe(lib: Library, kind: Kind?): List<LinhaCat> {
 @Composable
 fun TelaNavegar(lib: Library, kind: Kind?, inicio: Boolean = false) {
     var grade by remember { mutableStateOf<Grade?>(null) }
-    LaunchedEffect(Estado.voltarAoInicio) { grade = null }
     var escolherCategoria by remember { mutableStateOf(false) }
     val versao = Store.versao.intValue
 
