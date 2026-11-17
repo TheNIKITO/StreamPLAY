@@ -95,9 +95,10 @@ fun TelaCanais(lib: Library) {
     // número fixo de cada canal (a ordem de "Todos"), igual em todos os grupos
     val numeros = remember(lib) { HashMap<String, Int>().also { n -> lib.allChannels.forEachIndexed { i, c -> n[c.key] = i + 1 } } }
 
-    var termo by remember { mutableStateOf(Estado.busca) }
-    LaunchedEffect(Estado.busca) {
-        if (Estado.busca.isBlank()) termo = "" else { delay(260); termo = Estado.busca.trim() }
+    // no modo IA a caixa é um pedido para a IA (vai para o Início no pesquisar): não filtra os canais
+    var termo by remember { mutableStateOf(if (Estado.modoIa) "" else Estado.busca) }
+    LaunchedEffect(Estado.busca, Estado.modoIa) {
+        if (Estado.busca.isBlank() || Estado.modoIa) termo = "" else { delay(260); termo = Estado.busca.trim() }
     }
     var achados by remember { mutableStateOf<List<Item>?>(null) }
     LaunchedEffect(termo, lib) {

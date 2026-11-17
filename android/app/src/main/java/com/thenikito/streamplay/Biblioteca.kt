@@ -32,6 +32,8 @@ class Item(
     var year: String? = null
     var genre: String? = null
     var rating: String? = null
+    /** Palavras-chave do TMDB como vêm na lista ("car race|car chase"), para a busca com IA (só no celular). */
+    var palavras: String? = null
     var isRelease = false
     /** Canal: código no guia de programação (tvg-id). */
     var tvgId: String? = null
@@ -207,6 +209,9 @@ internal class Hasher {
 
 /** Leitura da lista M3U — as mesmas regras do app do PC (Library.cs). */
 object M3U {
+    /** A TV não tem a busca com IA: lá as palavras-chave nem são guardadas (economiza memória). */
+    @Volatile var lerPalavras = true
+
     // "FILMES | Lançamentos", "SERIES - Ação", "CANAIS: Esportes", "CANAIS = Esportes", "FILMES" ...
     private val GROUP_RX = Regex(
         "^\\s*(filmes?|movies?|vod|s[eé]ries?|seriados?|canais|canal)(?![a-zà-ÿ])\\s*[|:\\-–—/>=]*\\s*(.*)$",
@@ -307,6 +312,7 @@ object M3U {
             val year = a(attrs, "year", "ano", "tvg-year")
             val genre = a(attrs, "genre", "genero", "gênero", "tvg-genre")
             val rating = a(attrs, "rating", "nota", "tvg-rating")
+            val palavras = if (lerPalavras && kind != Kind.Channel) a(attrs, "palavras") else null
             val itemOpts: List<String> = opts ?: emptyList()
 
             if (kind == Kind.Series) {
@@ -317,7 +323,7 @@ object M3U {
                     lib.allSeries.add(it)
                     lib.mapas[Kind.Series.ordinal][it.id] = it
                 }
-                fill(show, plot, year, genre, rating, backdrop)
+                fill(show, plot, year, genre, rating, backdrop, palavras)
                 if (show.logo.isNullOrEmpty()) show.logo = logo
                 var number = sp.number
                 if (number <= 0) number = show.episodes.count { it.season == sp.season } + 1
@@ -340,7 +346,7 @@ object M3U {
                     mapa[id] = it
                     lib.all(kind).add(it)
                 }
-                fill(item, plot, year, genre, rating, backdrop)
+                fill(item, plot, year, genre, rating, backdrop, palavras)
                 if (item.logo.isNullOrEmpty()) item.logo = logo
                 if (kind == Kind.Channel && item.tvgId == null) item.tvgId = a(attrs, "tvg-id")
                 if (category.isRelease) item.isRelease = true
@@ -364,12 +370,13 @@ object M3U {
         if (i.addCategory(c.name)) c.items.add(i)
     }
 
-    private fun fill(t: Item, plot: String?, year: String?, genre: String?, rating: String?, backdrop: String?) {
+    private fun fill(t: Item, plot: String?, year: String?, genre: String?, rating: String?, backdrop: String?, palavras: String?) {
         if (t.plot == null) t.plot = plot
         if (t.year == null) t.year = year
         if (t.genre == null) t.genre = genre
         if (t.rating == null) t.rating = rating
         if (t.backdrop == null) t.backdrop = backdrop
+        if (t.palavras == null) t.palavras = palavras
     }
 
     fun classify(group: String?): Pair<Kind?, String?> {

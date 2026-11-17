@@ -53,6 +53,10 @@ object Estado {
     var minimizado by mutableStateOf(false); private set
     val playerNaTela get() = player != null && !minimizado
     var busca by mutableStateOf("")
+    /** Botão ✨ (só no celular): a caixa de busca vira um pedido para a IA, mandado pelo botão de pesquisar do teclado. */
+    var modoIa by mutableStateOf(false)
+    /** O pedido que a IA está respondendo (ou já respondeu) na página; null = sem busca com IA. */
+    var pedidoIa by mutableStateOf<String?>(null)
     /** Muda quando a aba deve voltar ao começo (saiu de um título aberto pela busca): a página fecha o "ver tudo". */
     var voltarAoInicio by mutableIntStateOf(0)
     var aviso by mutableStateOf<Aviso?>(null)
@@ -122,6 +126,7 @@ object Estado {
         iniciado = true
         app = ctx.applicationContext
         tab = Store.tab
+        M3U.lerPalavras = !com.thenikito.streamplay.ui.ehTv(ctx)   // a busca com IA é só do celular
         Conta.definirAparelho(com.thenikito.streamplay.ui.ehTv(ctx), android.os.Build.MANUFACTURER, android.os.Build.MODEL)
         // teste grátis: um teste por aparelho (o servidor só recebe o hash)
         @android.annotation.SuppressLint("HardwareIds")
@@ -393,6 +398,7 @@ object Estado {
         contaAtual = null
         atualizarOnline()
         busca = ""
+        sairDaIa()
         detalhes = null
         ajustes = false
         soltarPlayer()
@@ -436,12 +442,31 @@ object Estado {
         tab = t
         Store.tab = t
         busca = ""
+        sairDaIa()
         topoSolido = 0f
     }
 
     fun limparBusca() {
         busca = ""
+        sairDaIa()
         aplicarPendente()
+    }
+
+    private fun sairDaIa() {
+        modoIa = false
+        pedidoIa = null
+    }
+
+    /** Manda o pedido para a IA; os resultados aparecem no Início, Filmes ou Séries (nos Canais, vai para o Início). */
+    fun perguntarIa(texto: String) {
+        val pedido = texto.trim()
+        if (pedido.isEmpty()) return
+        if (tab == "channels") {
+            navegar("home")
+            busca = texto
+            modoIa = true
+        }
+        pedidoIa = pedido
     }
 
     private val semSobreposicao get() = detalhes == null && !ajustes && !playerNaTela
@@ -457,6 +482,7 @@ object Estado {
         // saiu de um título aberto pela busca: a aba volta para o começo (o cartão da busca some, o foco vai para o destaque)
         if (busca.isNotEmpty()) {
             busca = ""
+            sairDaIa()
             voltarAoInicio++
             focoAntes = null
             focoInicialPendente = true

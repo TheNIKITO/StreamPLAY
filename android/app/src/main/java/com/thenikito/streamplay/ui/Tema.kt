@@ -158,4 +158,10 @@ object Icones {
     val Usuario = icone("usuario", "M12,3 A9,9 0 1 1 11.99,3 Z M12,7 A3.3,3.3 0 1 1 11.99,7 Z M6.2,18.6 A6.6,6.6 0 0 1 17.8,18.6", contorno = true)
     val LogoPlay = icone("logoplay", "M7.2,3.3 C5.6,2.4 4.5,3.1 4.5,4.9 V19.1 C4.5,20.9 5.6,21.6 7.2,20.7 L19.6,13.6 C21.1,12.8 21.1,11.2 19.6,10.4 Z")
     val Abaixo = icone("abaixo", "M7,10l5,5 5,-5z")
+    /** Busca com IA (✨): uma estrela grande e duas pequenas. */
+    val Ia = icone(
+        "ia", "M10,3 L11.9,8.6 L17.5,10.5 L11.9,12.4 L10,18 L8.1,12.4 L2.5,10.5 L8.1,8.6 Z",
+        "M18.5,14 L19.4,16.6 L22,17.5 L19.4,18.4 L18.5,21 L17.6,18.4 L15,17.5 L17.6,16.6 Z",
+        "M18.5,2.5 L19.1,4.4 L21,5 L19.1,5.6 L18.5,7.5 L17.9,5.6 L16,5 L17.9,4.4 Z",
+    )
 }

@@ -75,6 +75,7 @@ import androidx.compose.ui.window.Dialog
 import com.thenikito.streamplay.Cartao
 import com.thenikito.streamplay.Category
 import com.thenikito.streamplay.Estado
+import com.thenikito.streamplay.Ia
 import com.thenikito.streamplay.Item
 import com.thenikito.streamplay.Kind
 import com.thenikito.streamplay.Library
@@ -120,22 +121,44 @@ fun TelaNavegar(lib: Library, kind: Kind?, inicio: Boolean = false) {
     var escolherCategoria by remember { mutableStateOf(false) }
     val versao = Store.versao.intValue
 
-    // a busca só filtra depois que a pessoa para de digitar
-    var termo by remember { mutableStateOf(Estado.busca) }
-    LaunchedEffect(Estado.busca) {
-        if (Estado.busca.isBlank()) termo = "" else { delay(260); termo = Estado.busca.trim() }
+    // a busca só filtra depois que a pessoa para de digitar (no modo IA, nada enquanto digita: o pedido vai no pesquisar)
+    var termo by remember { mutableStateOf(if (Estado.modoIa) "" else Estado.busca) }
+    LaunchedEffect(Estado.busca, Estado.modoIa) {
+        if (Estado.busca.isBlank() || Estado.modoIa) termo = "" else { delay(260); termo = Estado.busca.trim() }
     }
     var resultados by remember { mutableStateOf<List<Item>?>(null) }
     LaunchedEffect(termo, lib) {
         resultados = null
         if (termo.isNotBlank()) resultados = withContext(Dispatchers.Default) { buscar(lib, kind, termo) }
     }
+    // busca com IA (botão ✨): pergunta ao servidor e cruza a resposta com a lista
+    val pedido = Estado.pedidoIa
+    var ia by remember { mutableStateOf<RespostaIa?>(null) }
+    LaunchedEffect(pedido, lib) {
+        ia = null
+        if (pedido == null) return@LaunchedEffect
+        ia = try {
+            val r = withContext(Dispatchers.IO) { Ia.perguntar(pedido) }
+            val pool = if (kind == null) lib.allMovies + lib.allSeries else lib.all(kind)
+            val itens = withContext(Dispatchers.Default) { Ia.achar(r, pool) }
+            RespostaIa("✨ " + r.frase.trim().ifEmpty { pedido }, itens, null)
+        } catch (e: Ia.Erro) {
+            RespostaIa("✨ $pedido", emptyList(), e.message)
+        }
+    }
 
-    BackHandler(Estado.busca.isNotEmpty()) { Estado.limparBusca() }
-    BackHandler(grade != null && Estado.busca.isEmpty()) { grade = null }
+    BackHandler(Estado.busca.isNotEmpty() || pedido != null) { Estado.limparBusca() }
+    BackHandler(grade != null && Estado.busca.isEmpty() && pedido == null) { grade = null }
 
     val g = grade
+    val r = ia
     when {
+        pedido != null -> GradeItens(
+            r?.titulo ?: "✨ $pedido", r?.itens ?: emptyList(), voltar = { Estado.limparBusca() },
+            vazio = if (r?.erro != null) Pair("Não deu para perguntar à IA", r.erro)
+            else Pair("A IA não achou nada parecido na sua lista", "Tente pedir de outro jeito."),
+            carregando = r == null,
+        )
         termo.isNotBlank() -> GradeItens(
             "Resultados para \"$termo\"", resultados ?: emptyList(), voltar = { Estado.limparBusca() },
             vazio = Pair("Nada encontrado para \"$termo\"", "Confira a ortografia ou tente outro nome."), carregando = resultados == null,
@@ -155,6 +178,8 @@ fun TelaNavegar(lib: Library, kind: Kind?, inicio: Boolean = false) {
         }
     }
 }
+
+private class RespostaIa(val titulo: String, val itens: List<Item>, val erro: String?)
 
 private fun buscar(lib: Library, kind: Kind?, termo: String): List<Item> {
     val q = M3U.norm(termo)

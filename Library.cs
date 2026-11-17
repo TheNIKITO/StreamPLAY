@@ -29,6 +29,7 @@ public class Item
     public string Year { get; set; }
     public string Genre { get; set; }
     public string Rating { get; set; }
+    public string[] Keywords { get; set; }   // palavras-chave do TMDB (palavras="car race|car chase"), para a busca com IA
     public string Url { get; set; }
     public string TvgId { get; set; }   // canal: código no guia de programação (tvg-id)
     public List<string> Options { get; set; } = new();
@@ -541,6 +542,7 @@ public static class M3U
                 Year = A(attrs, "year", "ano", "tvg-year"),
                 Genre = A(attrs, "genre", "genero", "gênero", "tvg-genre"),
                 Rating = A(attrs, "rating", "nota", "tvg-rating"),
+                Keywords = A(attrs, "palavras")?.Split('|', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
                 Backdrop = backdrop,
             };
 
@@ -617,6 +619,7 @@ public static class M3U
         target.Genre ??= Empty(info.Genre);
         target.Rating ??= Empty(info.Rating);
         target.Backdrop ??= Empty(info.Backdrop);
+        if (target.Keywords == null && info.Keywords?.Length > 0) target.Keywords = info.Keywords;
     }
     static string Empty(string s) => string.IsNullOrWhiteSpace(s) ? null : s;
 

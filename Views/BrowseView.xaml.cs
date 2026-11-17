@@ -79,6 +79,8 @@ public partial class BrowseView : UserControl, IPage
     string _gridTitle;
     IList<Item> _gridItems;
     bool _searching;
+    MessageVM _gridVazio;
+    int _pedidoIa;   // cada busca nova (ou volta ao começo) faz a resposta da IA que ainda não chegou ser ignorada
     int _cols;
 
     public BrowseView(Library lib, Kind? kind, bool home = false)
@@ -260,9 +262,11 @@ public partial class BrowseView : UserControl, IPage
 
     // ---------- Grade ----------
 
-    void ShowGrid(string title, IList<Item> items, bool isRoot = false, bool keepScroll = false)
+    // vazio: a mensagem da grade sem itens (ex.: "Perguntando à IA…"); redesenhar a mesma grade (keepScroll) mantém a anterior
+    void ShowGrid(string title, IList<Item> items, bool isRoot = false, bool keepScroll = false, MessageVM vazio = null)
     {
         double off = keepScroll && _sv != null ? _sv.VerticalOffset : 0;
+        if (!keepScroll) _gridVazio = vazio;
         _gridTitle = title;
         _gridItems = items;
         _heroTimer.Stop();
@@ -275,11 +279,11 @@ public partial class BrowseView : UserControl, IPage
         _feed.Add(new SpacerVM { Height = 140 });
         if (items.Count == 0)
         {
-            _feed.Add(_searching
+            _feed.Add(_gridVazio ?? (_searching
                 ? new MessageVM { Title = $"Nada encontrado para \"{title.Replace("Resultados para ", "").Trim('"')}\"", Text = "Confira a ortografia ou tente outro nome." }
                 : _kind == null
                     ? new MessageVM { Title = "Sua lista está vazia", Text = "Abra um filme ou série e clique no botão + para guardar aqui." }
-                    : new MessageVM { Title = "Nada por aqui", Text = "" });
+                    : new MessageVM { Title = "Nada por aqui", Text = "" }));
         }
         foreach (var row in UI.Rows(items.Select(i => MakeCard(i)), _cols)) _feed.Add(new GridRowVM { Cards = row, Cols = _cols });
         if (_sv != null) Dispatcher.BeginInvoke(DispatcherPriority.Loaded, () => _sv.ScrollToVerticalOffset(off));
@@ -304,6 +308,7 @@ public partial class BrowseView : UserControl, IPage
 
     public void Inicio()
     {
+        _pedidoIa++;
         CatPopup.IsOpen = false;
         if (!TemFeed) { if (_searching) { _searching = false; ShowGrid("Minha lista", Favorites(), isRoot: true); } return; }
         if (_gridItems != null) ExitGrid();
@@ -312,6 +317,7 @@ public partial class BrowseView : UserControl, IPage
 
     public void Search(string text)
     {
+        _pedidoIa++;
         if (string.IsNullOrEmpty(text))
         {
             if (!_searching) return;
@@ -325,6 +331,29 @@ public partial class BrowseView : UserControl, IPage
         var found = pool.Where(i => M3U.Norm(i.Name).Contains(q))
                         .OrderBy(i => M3U.Norm(i.Name).StartsWith(q) ? 0 : 1).ToList();
         ShowGrid($"Resultados para \"{text}\"", found);
+    }
+
+    /// <summary>Botão ✨: pergunta à IA e mostra o que da lista combina com o pedido.</summary>
+    public async void BuscarComIa(string pergunta)
+    {
+        int meu = ++_pedidoIa;
+        _searching = true;
+        string titulo = "✨ " + pergunta;
+        ShowGrid(titulo, Array.Empty<Item>(), vazio: new MessageVM { Title = "Perguntando à IA…", Text = "Procurando na sua lista o que combina com o pedido." });
+        try
+        {
+            var r = await Ia.PerguntarAsync(pergunta);
+            if (meu != _pedidoIa) return;   // a pessoa já buscou outra coisa ou saiu da busca
+            var pool = (_kind == null ? _lib.AllMovies.Concat(_lib.AllSeries) : _lib.All(_kind.Value)).ToList();
+            var achados = await Task.Run(() => Ia.Achar(r, pool));
+            if (meu != _pedidoIa) return;
+            if (!string.IsNullOrWhiteSpace(r.Frase)) titulo = "✨ " + r.Frase.Trim();
+            ShowGrid(titulo, achados, vazio: new MessageVM { Title = "A IA não achou nada parecido na sua lista", Text = "Tente pedir de outro jeito." });
+        }
+        catch (Ia.IaErro ex)
+        {
+            if (meu == _pedidoIa) ShowGrid(titulo, Array.Empty<Item>(), vazio: new MessageVM { Title = "Não deu para perguntar à IA", Text = ex.Message });
+        }
     }
 
     // ---------- Cliques ----------

@@ -509,10 +509,55 @@ public partial class MainWindow : Window
 
     // ---------- Busca ----------
 
+    // modo IA (botão ✨): a caixa de busca vira um pedido para a IA, mandado com Enter (cada pedido custa, então nada de
+    // perguntar enquanto a pessoa digita)
+    bool _modoIa;
+    static readonly System.Windows.Media.SolidColorBrush CorIa = Congelar(new(System.Windows.Media.Color.FromRgb(0xB3, 0x88, 0xFF)));
+    static readonly System.Windows.Media.SolidColorBrush BordaBusca = Congelar(new(System.Windows.Media.Color.FromArgb(0x40, 0xFF, 0xFF, 0xFF)));
+    static System.Windows.Media.SolidColorBrush Congelar(System.Windows.Media.SolidColorBrush b) { b.Freeze(); return b; }
+
     void SearchBtn_Click(object sender, RoutedEventArgs e)
     {
-        if (SearchBox.Width > 0 && SearchBox.Text.Length > 0) { SearchBox.Focus(); return; }
+        if (_modoIa) TrocarModo(ia: false);
+        else if (SearchBox.Width > 0 && SearchBox.Text.Length > 0) { SearchBox.Focus(); return; }
         OpenSearch();
+    }
+
+    void IaBtn_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_modoIa) TrocarModo(ia: true);
+        OpenSearch();
+    }
+
+    void TrocarModo(bool ia)
+    {
+        _modoIa = ia;
+        SearchBox.Text = "";   // saindo do modo IA, a busca normal vazia devolve a página ao normal
+        AtualizarModo();
+    }
+
+    void AtualizarModo()
+    {
+        SearchWrap.BorderBrush = _modoIa ? CorIa : BordaBusca;
+        IaDica.Visibility = _modoIa && SearchBox.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        if (_modoIa) IaIco.Stroke = CorIa; else IaIco.ClearValue(System.Windows.Shapes.Shape.StrokeProperty);
+    }
+
+    void PerguntarIa()
+    {
+        var pergunta = SearchBox.Text.Trim();
+        if (pergunta.Length == 0) return;
+        if (PageHost.Content is not BrowseView)
+        {
+            // nos Canais não tem filmes: mostra no Início (a troca de aba limpa a caixa, então o pedido volta para ela)
+            Navigate("home");
+            _searchTimer.Stop();
+            _modoIa = true;
+            SearchBox.Text = pergunta;
+            OpenSearch();
+            AtualizarModo();
+        }
+        (PageHost.Content as BrowseView)?.BuscarComIa(pergunta);
     }
 
     void OpenSearch()
@@ -525,8 +570,10 @@ public partial class MainWindow : Window
 
     void CloseSearch(bool clear)
     {
-        if (clear) SearchBox.Text = "";
+        if (clear) { _modoIa = false; SearchBox.Text = ""; }   // antes de limpar: a busca vazia volta a página ao normal
         if (SearchBox.Text.Length > 0) return;
+        _modoIa = false;
+        AtualizarModo();
         SearchWrap.BorderThickness = new Thickness(0);
         SearchWrap.Background = System.Windows.Media.Brushes.Transparent;
         SearchBox.BeginAnimation(WidthProperty, new DoubleAnimation(0, TimeSpan.FromMilliseconds(180)));
@@ -534,7 +581,20 @@ public partial class MainWindow : Window
 
     public void FecharBusca() => CloseSearch(clear: true);
 
-    void SearchBox_TextChanged(object sender, TextChangedEventArgs e) { _searchTimer.Stop(); _searchTimer.Start(); }
+    void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_modoIa) { AtualizarModo(); return; }
+        _searchTimer.Stop();
+        _searchTimer.Start();
+    }
+
+    void SearchBox_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter) return;
+        e.Handled = true;
+        if (_modoIa) PerguntarIa();
+        else { _searchTimer.Stop(); (PageHost.Content as IPage)?.Search(SearchBox.Text.Trim()); }
+    }
     void SearchBox_LostFocus(object sender, KeyboardFocusChangedEventArgs e) => CloseSearch(clear: false);
 
     // ---------- Sobreposições ----------
@@ -693,7 +753,7 @@ public partial class MainWindow : Window
             if (OverlayOpen) { CloseOverlay(); e.Handled = true; }
             else if (SearchBox.IsKeyboardFocused || SearchBox.Text.Length > 0) { CloseSearch(clear: true); Keyboard.ClearFocus(); e.Handled = true; }
         }
-        else if (ctrl && e.Key == Key.F && Lib != null && TopBar.IsVisible) { OpenSearch(); e.Handled = true; }
+        else if (ctrl && e.Key == Key.F && Lib != null && TopBar.IsVisible) { if (_modoIa) TrocarModo(ia: false); OpenSearch(); e.Handled = true; }
         else if (e.Key == Key.F5 && Lib != null && !NaTelaDeConta) { _ = LoadLibrary(quiet: true); e.Handled = true; }
     }
 

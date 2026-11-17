@@ -40,15 +40,26 @@
         </StackPanel>
 
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" WindowChrome.IsHitTestVisibleInChrome="True">
+          <Button x:Name="IaBtn" Style="{StaticResource TopIcon}" Click="IaBtn_Click" ToolTip="Pedir à IA (ex.: filmes de carro)"
+                  AutomationProperties.Name="Buscar com IA" Margin="0,0,2,0">
+            <Viewbox><Path x:Name="IaIco" Style="{StaticResource IcoS}" Data="{StaticResource G.Ia}" StrokeThickness="1.6"/></Viewbox>
+          </Button>
           <Border x:Name="SearchWrap" Height="40" CornerRadius="8" BorderBrush="#40FFFFFF" BorderThickness="0" Background="Transparent" Margin="0,0,6,0">
             <StackPanel Orientation="Horizontal">
               <Button x:Name="SearchBtn" Style="{StaticResource TopIcon}" Click="SearchBtn_Click" ToolTip="Buscar (Ctrl+F)"
                       AutomationProperties.Name="Buscar">
                 <Viewbox><Path Style="{StaticResource IcoS}" Data="{StaticResource G.Search}" StrokeThickness="2"/></Viewbox>
               </Button>
-              <TextBox x:Name="SearchBox" Width="0" Background="Transparent" BorderThickness="0" Foreground="White" CaretBrush="White"
-                       FontSize="15" VerticalContentAlignment="Center" Padding="0,0,10,0" TextChanged="SearchBox_TextChanged"
-                       LostKeyboardFocus="SearchBox_LostFocus" FocusVisualStyle="{x:Null}" AutomationProperties.Name="Texto da busca"/>
+              <Grid>
+                <TextBox x:Name="SearchBox" Width="0" Background="Transparent" BorderThickness="0" Foreground="White" CaretBrush="White"
+                         FontSize="15" VerticalContentAlignment="Center" Padding="0,0,10,0" TextChanged="SearchBox_TextChanged"
+                         PreviewKeyDown="SearchBox_KeyDown"
+                         LostKeyboardFocus="SearchBox_LostFocus" FocusVisualStyle="{x:Null}" AutomationProperties.Name="Texto da busca"/>
+                <!-- dica do modo IA: só aparece com a caixa vazia -->
+                <TextBlock x:Name="IaDica" Text="Peça à IA: filmes de carro, pra chorar..." Foreground="#80FFFFFF" FontSize="14"
+                           VerticalAlignment="Center" Margin="2,0,10,0" IsHitTestVisible="False" TextTrimming="CharacterEllipsis"
+                           Width="{Binding ActualWidth, ElementName=SearchBox}" Visibility="Collapsed"/>
+              </Grid>
             </StackPanel>
           </Border>
           <Grid Margin="0,0,6,0">

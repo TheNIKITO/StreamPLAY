@@ -81,6 +81,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.thenikito.streamplay.Estado
@@ -189,7 +190,9 @@ fun BarraTopo() {
                     )
                     LaunchedEffect(Unit) { try { campo.requestFocus() } catch (_: Exception) { } }
                 } else {
-                    IconeBotao(Icons.Filled.Search, "Buscar", { buscando = true })
+                    // busca com IA: só no celular
+                    if (!m.tv) IconeBotao(Icones.Ia, "Buscar com IA", { Estado.modoIa = true; buscando = true })
+                    IconeBotao(Icons.Filled.Search, "Buscar", { Estado.modoIa = false; buscando = true })
                 }
                 Spacer(Modifier.width(4.dp))
                 Box {
@@ -331,6 +334,9 @@ private fun DialogoConta(fechar: () -> Unit) {
     LaunchedEffect(Unit) { if (controle) { delay(150); try { fr.requestFocus() } catch (_: Exception) { } } }
 }
 
+/** Cor da busca com IA (a mesma do PC). */
+private val CorIa = Color(0xFFB388FF)
+
 @Composable
 private fun CampoBusca(fr: FocusRequester, modifier: Modifier, fechar: () -> Unit) {
     var focado by remember { mutableStateOf(false) }
@@ -348,18 +354,27 @@ private fun CampoBusca(fr: FocusRequester, modifier: Modifier, fechar: () -> Uni
             try { Estado.alvoConteudo?.requestFocus() } catch (_: Exception) { }
         }
     }
+    // modo IA (botão ✨): borda roxa, e o pedido só vai para a IA no botão de pesquisar do teclado
+    val ia = Estado.modoIa
+    fun pesquisar() {
+        if (ia) Estado.perguntarIa(Estado.busca)
+        irParaResultados()
+    }
     Row(
         modifier
             .height(40.dp)
             .clip(RoundedCornerShape(4.dp))
             .background(Color(0xCC000000))
-            .border(1.dp, if (focado) Color.White else Color(0xFF808080), RoundedCornerShape(4.dp))
+            .border(1.dp, if (ia) CorIa else if (focado) Color.White else Color(0xFF808080), RoundedCornerShape(4.dp))
             .padding(start = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(Icons.Filled.Search, null, tint = Color.White, modifier = Modifier.padding(end = 8.dp))
+        Icon(if (ia) Icones.Ia else Icons.Filled.Search, null, tint = if (ia) CorIa else Color.White, modifier = Modifier.padding(end = 8.dp))
         Box(Modifier.weight(1f)) {
-            if (Estado.busca.isEmpty()) Text("Títulos, canais...", color = Cor.Dim, fontSize = 15.sp)
+            if (Estado.busca.isEmpty()) Text(
+                if (ia) "Peça à IA: filmes de carro..." else "Títulos, canais...", color = Cor.Dim, fontSize = 15.sp,
+                maxLines = 1, overflow = TextOverflow.Ellipsis,
+            )
             BasicTextField(
                 value = Estado.busca,
                 onValueChange = { Estado.busca = it },
@@ -367,7 +382,7 @@ private fun CampoBusca(fr: FocusRequester, modifier: Modifier, fechar: () -> Uni
                 textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
                 cursorBrush = SolidColor(Color.White),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { irParaResultados() }, onDone = { irParaResultados() }),
+                keyboardActions = KeyboardActions(onSearch = { pesquisar() }, onDone = { pesquisar() }),
                 modifier = Modifier.fillMaxWidth().focusRequester(fr).onFocusChanged { focado = it.isFocused },
             )
         }
