@@ -420,33 +420,74 @@
     </Setter>
   </Style>
 
-  <!-- Barra de rolagem fina -->
+  <!-- Barra de rolagem: fina na aparência, mas a área de pegar é larga (bom para touchpad); com o mouse em cima ela
+       engrossa, e clicar na faixa acima/abaixo do puxador rola uma página -->
   <Style x:Key="ThumbBar" TargetType="Thumb">
+    <Setter Property="MinHeight" Value="44"/>
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Thumb">
-          <Border x:Name="t" Background="#55FFFFFF" CornerRadius="4"/>
+          <!-- a área toda pega o mouse; o desenho tem a largura do Tag (6, ou 10 com o mouse em cima da barra) -->
+          <Border Background="Transparent">
+            <Border x:Name="t" Background="#70FFFFFF" CornerRadius="4" HorizontalAlignment="Center"
+                    Width="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"/>
+          </Border>
           <ControlTemplate.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-              <Setter TargetName="t" Property="Background" Value="#99FFFFFF"/>
+              <Setter TargetName="t" Property="Background" Value="#B0FFFFFF"/>
+            </Trigger>
+            <Trigger Property="IsDragging" Value="True">
+              <Setter TargetName="t" Property="Background" Value="#E50914"/>
             </Trigger>
           </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value>
     </Setter>
   </Style>
+  <Style x:Key="ThumbBarH" TargetType="Thumb">
+    <Setter Property="MinWidth" Value="44"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Thumb">
+          <Border x:Name="t" Background="#70FFFFFF" CornerRadius="4"/>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="t" Property="Background" Value="#B0FFFFFF"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+  <Style x:Key="TrackPagina" TargetType="RepeatButton">
+    <Setter Property="Focusable" Value="False"/>
+    <Setter Property="IsTabStop" Value="False"/>
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="RepeatButton"><Border Background="Transparent"/></ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
   <Style TargetType="ScrollBar">
-    <Setter Property="Width" Value="8"/>
-    <Setter Property="MinWidth" Value="8"/>
+    <Setter Property="Width" Value="16"/>
+    <Setter Property="MinWidth" Value="16"/>
     <Setter Property="Background" Value="Transparent"/>
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="ScrollBar">
-          <Border Background="Transparent" Margin="0,2">
+          <Border x:Name="faixa" Background="Transparent" CornerRadius="5" Margin="2,2">
             <Track x:Name="PART_Track" IsDirectionReversed="True">
-              <Track.Thumb><Thumb Style="{StaticResource ThumbBar}" Margin="1,0"/></Track.Thumb>
+              <Track.DecreaseRepeatButton><RepeatButton Style="{StaticResource TrackPagina}" Command="ScrollBar.PageUpCommand"/></Track.DecreaseRepeatButton>
+              <Track.IncreaseRepeatButton><RepeatButton Style="{StaticResource TrackPagina}" Command="ScrollBar.PageDownCommand"/></Track.IncreaseRepeatButton>
+              <Track.Thumb><Thumb x:Name="puxador" Style="{StaticResource ThumbBar}" Tag="6"/></Track.Thumb>
             </Track>
           </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="faixa" Property="Background" Value="#22FFFFFF"/>
+              <Setter TargetName="puxador" Property="Tag" Value="10"/>
+            </Trigger>
+          </ControlTemplate.Triggers>
         </ControlTemplate>
       </Setter.Value>
     </Setter>
@@ -460,7 +501,7 @@
             <ControlTemplate TargetType="ScrollBar">
               <Border Background="Transparent" Margin="2,0">
                 <Track x:Name="PART_Track" IsDirectionReversed="False">
-                  <Track.Thumb><Thumb Style="{StaticResource ThumbBar}" Margin="0,1"/></Track.Thumb>
+                  <Track.Thumb><Thumb Style="{StaticResource ThumbBarH}" Margin="0,1"/></Track.Thumb>
                 </Track>
               </Border>
             </ControlTemplate>

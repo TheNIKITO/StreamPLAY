@@ -787,6 +787,22 @@ public partial class MainWindow : Window
         }
         else if (ctrl && e.Key == Key.F && Lib != null && TopBar.IsVisible) { if (_modoIa) TrocarModo(ia: false); OpenSearch(); e.Handled = true; }
         else if (e.Key == Key.F5 && Lib != null && !NaTelaDeConta) { _ = LoadLibrary(quiet: true); e.Handled = true; }
+        // Page Up / Page Down / Home / End rolam a tela (Home e End ficam com a caixa de busca quando se está digitando)
+        else if (e.Key is Key.PageDown or Key.PageUp or Key.Home or Key.End && !ctrl
+                 && !(SearchBox.IsKeyboardFocused && e.Key is Key.Home or Key.End) && RolagemDaTela() is { } sv)
+        {
+            if (e.Key == Key.PageDown) Smooth.Pagina(sv, 1);
+            else if (e.Key == Key.PageUp) Smooth.Pagina(sv, -1);
+            else Smooth.IrPara(sv, e.Key == Key.Home ? 0 : sv.ScrollableHeight, 450);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>A rolagem da tela à vista: a da janela de detalhes, se aberta; senão a maior da página.</summary>
+    ScrollViewer RolagemDaTela()
+    {
+        DependencyObject raiz = OverlayOpen ? OverlayHost : NaTelaDeConta ? null : PageHost;
+        return UI.FindAll<ScrollViewer>(raiz).Where(s => s.IsVisible && s.ScrollableHeight > 0).MaxBy(s => s.ViewportHeight);
     }
 
     // ---------- Atualização automática ----------

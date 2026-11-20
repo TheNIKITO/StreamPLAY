@@ -57,6 +57,17 @@ public static class UI
         return null;
     }
 
+    public static IEnumerable<T> FindAll<T>(DependencyObject root) where T : DependencyObject
+    {
+        if (root == null) yield break;
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var c = VisualTreeHelper.GetChild(root, i);
+            if (c is T t) yield return t;
+            foreach (var r in FindAll<T>(c)) yield return r;
+        }
+    }
+
     public static T Up<T>(DependencyObject d) where T : DependencyObject
     {
         while (d != null && d is not T) d = d is Visual || d is System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(d) : LogicalTreeHelper.GetParent(d);
@@ -107,17 +118,32 @@ public static class Smooth
         var sv = sender as ScrollViewer ?? UI.Find<ScrollViewer>((DependencyObject)sender);
         if (sv == null || sv.ScrollableHeight <= 0) return;
         e.Handled = true;
-        Rolar(sv, e.Delta);
+        // touchpad (e roda "livre"): manda muitos passos pequenos, que não são múltiplos de 120. Com a animação longa da
+        // roda a tela ficava correndo atrás do dedo; para ele a animação é curtinha e a rolagem acompanha o dedo.
+        Rolar(sv, e.Delta, e.Delta % 120 != 0 ? 70 : 280);
     }
 
     /// <summary>Um "giro" da roda do mouse (delta 120 = um dente; negativo desce).</summary>
-    public static void Rolar(ScrollViewer sv, int delta)
+    public static void Rolar(ScrollViewer sv, int delta, int ms = 280)
+    {
+        double baseOff = State.TryGetValue(sv, out var st) && (DateTime.Now - st.at).TotalMilliseconds < 280 ? st.target : sv.VerticalOffset;
+        IrPara(sv, baseOff - delta * 1.4, ms);
+    }
+
+    /// <summary>Page Up / Page Down: quase uma tela inteira (sobra um pedaço da anterior para não se perder).</summary>
+    public static void Pagina(ScrollViewer sv, int direcao)
+    {
+        double baseOff = State.TryGetValue(sv, out var st) && (DateTime.Now - st.at).TotalMilliseconds < 320 ? st.target : sv.VerticalOffset;
+        IrPara(sv, baseOff + direcao * sv.ViewportHeight * 0.85, 320);
+    }
+
+    /// <summary>Rola suave até a posição (Home = 0, End = sv.ScrollableHeight).</summary>
+    public static void IrPara(ScrollViewer sv, double alvo, int ms = 320)
     {
         double cur = sv.VerticalOffset;
-        double baseOff = State.TryGetValue(sv, out var st) && (DateTime.Now - st.at).TotalMilliseconds < 280 ? st.target : cur;
-        double target = Math.Clamp(baseOff - delta * 1.4, 0, sv.ScrollableHeight);
+        double target = Math.Clamp(alvo, 0, sv.ScrollableHeight);
         State[sv] = (target, DateTime.Now);
-        var a = new DoubleAnimation(cur, target, TimeSpan.FromMilliseconds(280)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
+        var a = new DoubleAnimation(cur, target, TimeSpan.FromMilliseconds(ms)) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } };
         sv.BeginAnimation(OffsetProperty, a);
     }
 
