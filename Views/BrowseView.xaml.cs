@@ -110,8 +110,8 @@ public partial class BrowseView : UserControl, IPage
 
     string Titulo => _home ? "" : _kind == Kind.Movie ? "Filmes" : _kind == Kind.Series ? "Séries" : "Minha lista";
 
-    // o banner deixa a primeira fileira (Continuar assistindo) aparecer sem rolar
-    double HeroHeight() => Math.Clamp(Math.Min(ActualWidth * 0.42, ActualHeight * 0.72), 440, 760);
+    // o banner deixa a primeira fileira (Continuar assistindo) aparecer inteira sem rolar: título + capas ≈ 330
+    double HeroHeight() => Math.Clamp(Math.Min(Math.Min(ActualWidth * 0.42, ActualHeight * 0.72), ActualHeight - 330), 420, 760);
 
     // ---------- Feed (hero + fileiras) ----------
 

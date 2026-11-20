@@ -56,9 +56,24 @@ public partial class MainWindow : Window
     Rect _preBounds = Rect.Empty;
     DateTime _splashStart;
 
+    // Telas pequenas (ex.: 1366x768): tudo encolhe junto, como uma tela de 1600x900 vista menor, em vez de o banner e
+    // as letras ocuparem a tela toda. O player fica de fora (o vídeo do VLC é uma janela do Windows, não encolhe).
+    const double LarguraBase = 1600, AlturaBase = 900, EscalaMinima = 0.78;
+    readonly System.Windows.Media.ScaleTransform _escala = new(1, 1);
+
+    void AjustarEscala()
+    {
+        double s = Math.Clamp(Math.Min(ActualWidth / LarguraBase, ActualHeight / AlturaBase), EscalaMinima, 1);
+        if (Math.Abs(s - _escala.ScaleX) < 0.005) return;
+        _escala.ScaleX = _escala.ScaleY = s;
+        if (WindowChrome.GetWindowChrome(this) is { } c) c.CaptionHeight = 68 * s;
+    }
+
     public MainWindow()
     {
         InitializeComponent();
+        foreach (var el in new FrameworkElement[] { PageHost, TopBar, OverlayHost, UpdateBanner, ToastBox, WinBtns }) el.LayoutTransform = _escala;
+        SizeChanged += (_, _) => AjustarEscala();
         I = this;
         _reloadTimer.Tick += async (_, _) => { _reloadTimer.Stop(); await LoadLibrary(quiet: true); };
         _searchTimer.Tick += (_, _) => { _searchTimer.Stop(); (PageHost.Content as IPage)?.Search(SearchBox.Text.Trim()); };
@@ -710,9 +725,9 @@ public partial class MainWindow : Window
         SyncTopmost();
     }
 
-    static WindowChrome NewChrome() => new()
+    WindowChrome NewChrome() => new()
     {
-        CaptionHeight = 68, ResizeBorderThickness = new Thickness(6),
+        CaptionHeight = 68 * _escala.ScaleY, ResizeBorderThickness = new Thickness(6),
         GlassFrameThickness = new Thickness(0), CornerRadius = new CornerRadius(0), UseAeroCaptionButtons = false,
     };
 
