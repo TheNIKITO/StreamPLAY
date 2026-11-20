@@ -69,9 +69,28 @@ public partial class MainWindow : Window
         if (WindowChrome.GetWindowChrome(this) is { } c) c.CaptionHeight = 68 * s;
     }
 
+    // A janela abre com 1366x820, centralizada. Num notebook 1366x768 (uns 728 livres sem a barra de tarefas) ela começava
+    // acima da tela: a barra de cima sumia e o fim ficava atrás da barra de tarefas. Se não couber, abre maximizada.
+    // STREAMPLAY_TESTE_AREA ("x,y,largura,altura") só existe para testes: finge uma área livre de outro tamanho.
+    void CaberNaTela()
+    {
+        var area = SystemParameters.WorkArea;
+        if (Environment.GetEnvironmentVariable("STREAMPLAY_TESTE_AREA")?.Split(',') is [var x, var y, var w, var h])
+            area = new Rect(double.Parse(x), double.Parse(y), double.Parse(w), double.Parse(h));
+        if (Width <= area.Width && Height <= area.Height) return;
+        Width = Math.Min(Width, area.Width);
+        Height = Math.Min(Height, area.Height);
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        Left = area.Left + (area.Width - Width) / 2;
+        Top = area.Top + (area.Height - Height) / 2;
+        _abrirMaximizada = true;   // maximiza em OnSourceInitialized: antes disso o Windows maximiza no monitor principal
+    }
+    bool _abrirMaximizada;
+
     public MainWindow()
     {
         InitializeComponent();
+        CaberNaTela();
         foreach (var el in new FrameworkElement[] { PageHost, TopBar, OverlayHost, UpdateBanner, ToastBox, WinBtns }) el.LayoutTransform = _escala;
         SizeChanged += (_, _) => AjustarEscala();
         I = this;
@@ -972,6 +991,7 @@ public partial class MainWindow : Window
     {
         base.OnSourceInitialized(e);
         HwndSource.FromHwnd(new WindowInteropHelper(this).Handle)?.AddHook(WndProc);
+        if (_abrirMaximizada) WindowState = WindowState.Maximized;
     }
 
     IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
